@@ -17,6 +17,7 @@ import PoliceRules from "./pages/Police/Rules";
 import AdminDashboard from "./pages/Adminpage/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import FIRCalendar from "./pages/Police/Calender";
+import PoliceChat from "./pages/Police/PoliceChat";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["police"]}>
                   <FIRCalendar />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/police/chat"
+              element={
+                <ProtectedRoute allowedRoles={["police"]}>
+                  <PoliceChat />
                 </ProtectedRoute>
               }
             />

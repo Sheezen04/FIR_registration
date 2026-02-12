@@ -31,6 +31,7 @@ import {
   Info,
   CalendarIcon,
   Calendar,
+  MessageCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -49,12 +50,17 @@ const navItems = [
     href: "/police/dashboard",
     icon: <Shield className="h-4 w-4" />,
   },
-    {
+  {
     label: "Calendar of F.I.Rs",
     href: "/police/calendar",
     icon: <Calendar className="h-4 w-4" />,
   },
-    {
+  {
+    label: "Chat",
+    href: "/police/chat",
+    icon: <MessageCircle className="h-4 w-4" />
+  },
+  {
     label: "Rules & Laws",
     href: "/police/rules",
     icon: <Scale className="h-4 w-4" />,

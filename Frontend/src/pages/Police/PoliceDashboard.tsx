@@ -19,6 +19,7 @@ import {
   Search,
   Filter,
   Scale,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,7 +53,12 @@ const navItems = [
     href: "/police/calendar",
     icon: <Calendar className="h-4 w-4" />,
   },
-    {
+  {
+    label: "Chat",
+    href: "/police/chat",
+    icon: <MessageCircle className="h-4 w-4" />
+  },
+  {
     label: "Rules & Laws",
     href: "/police/rules",
     icon: <Scale className="h-4 w-4" />,
@@ -510,10 +516,10 @@ export default function PoliceDashboard() {
                           </h3>
                           {(group.relativeLabel === "Today" ||
                             group.relativeLabel === "Yesterday") && (
-                            <p className="text-xs text-muted-foreground">
-                              {group.dateLabel}
-                            </p>
-                          )}
+                              <p className="text-xs text-muted-foreground">
+                                {group.dateLabel}
+                              </p>
+                            )}
                         </div>
                         <span className="ml-2 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
                           {group.firs.length}{" "}
