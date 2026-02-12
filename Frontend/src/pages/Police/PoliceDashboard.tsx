@@ -48,6 +48,11 @@ const navItems = [
     icon: <Shield className="h-4 w-4" />,
   },
   {
+    label: "Calendar of F.I.Rs",
+    href: "/police/calendar",
+    icon: <Calendar className="h-4 w-4" />,
+  },
+    {
     label: "Rules & Laws",
     href: "/police/rules",
     icon: <Scale className="h-4 w-4" />,
