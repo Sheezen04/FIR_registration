@@ -6,6 +6,8 @@
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>4.0.2</version>
+		<!-- <version>4.0.2</version> -->
+
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.example</groupId>
@@ -28,7 +30,7 @@
 	</scm>
 	<properties>
 		<java.version>19</java.version>
-
+  <!-- <java.version>19</java.version> -->
 	</properties>
 	<dependencies>
 		<dependency>
