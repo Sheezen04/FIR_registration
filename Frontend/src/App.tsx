@@ -8,12 +8,12 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import AdminRegisterPage from "./pages/AdminRegisterPage";
-import PoliceAuthPage from "./pages/PoliceAuthPage";
-import AdminAuthPage from "./pages/AdminAuthPage";
-import CitizenDashboard from "./pages/CitizenDashboard";
-import PoliceDashboard from "./pages/PoliceDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
+import AdminRegisterPage from "./pages/Adminpage/AdminRegisterPage";
+import PoliceAuthPage from "./pages/Police/PoliceAuthPage";
+import AdminAuthPage from "./pages/Adminpage/AdminAuthPage";
+import CitizenDashboard from "./pages/Citizen/CitizenDashboard";
+import PoliceDashboard from "./pages/Police/PoliceDashboard";
+import AdminDashboard from "./pages/Adminpage/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
