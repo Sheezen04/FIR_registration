@@ -13,6 +13,7 @@ import PoliceAuthPage from "./pages/Police/PoliceAuthPage";
 import AdminAuthPage from "./pages/Adminpage/AdminAuthPage";
 import CitizenDashboard from "./pages/Citizen/CitizenDashboard";
 import PoliceDashboard from "./pages/Police/PoliceDashboard";
+import PoliceRules from "./pages/Police/Rules";
 import AdminDashboard from "./pages/Adminpage/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -33,7 +34,10 @@ const App = () => (
             <Route path="/police" element={<PoliceAuthPage />} />
             <Route path="/admin" element={<AdminAuthPage />} />
             <Route path="/citizen/*" element={<ProtectedRoute allowedRoles={["citizen"]}><CitizenDashboard /></ProtectedRoute>} />
-            <Route path="/police/dashboard/*" element={<ProtectedRoute allowedRoles={["police"]}><PoliceDashboard /></ProtectedRoute>} />
+            <Route path="/police/dashboard" element={<ProtectedRoute allowedRoles={["police"]}><PoliceDashboard /></ProtectedRoute>} />
+            <Route path="/police/firs" element={<ProtectedRoute allowedRoles={["police"]}><PoliceDashboard /></ProtectedRoute>} />
+            <Route path="/police/rules" element={<ProtectedRoute allowedRoles={["police"]}><PoliceRules /></ProtectedRoute>} />
+            <Route path="/police/users" element={<ProtectedRoute allowedRoles={["police"]}><PoliceDashboard /></ProtectedRoute>} />
             <Route path="/admin/dashboard/*" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
