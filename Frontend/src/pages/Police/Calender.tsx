@@ -314,15 +314,14 @@ const EvidenceFiles = ({ files }: { files: string[] }) => {
                   className="flex items-center gap-3 p-3 rounded-xl border-2 border-slate-200 hover:border-indigo-200 bg-white hover:bg-slate-50 transition-all group"
                 >
                   <div
-                    className={`p-2.5 rounded-lg ${
-                      fileType === "pdf"
+                    className={`p-2.5 rounded-lg ${fileType === "pdf"
                         ? "bg-red-50"
                         : fileType === "doc"
-                        ? "bg-blue-50"
-                        : fileType === "video"
-                        ? "bg-purple-50"
-                        : "bg-slate-50"
-                    }`}
+                          ? "bg-blue-50"
+                          : fileType === "video"
+                            ? "bg-purple-50"
+                            : "bg-slate-50"
+                      }`}
                   >
                     {getFileIcon(filePath)}
                   </div>
@@ -674,42 +673,38 @@ export default function FIRCalendar() {
       days.push(
         <div
           key={day}
-          className={`min-h-[130px] p-3 border transition-all duration-300 cursor-pointer group relative overflow-hidden ${
-            isSelected
+          className={`min-h-[130px] p-3 border transition-all duration-300 cursor-pointer group relative overflow-hidden ${isSelected
               ? "bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 shadow-lg shadow-indigo-100 scale-[1.02] z-10"
               : isToday
-              ? "bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 shadow-md"
-              : "bg-white border-slate-200 hover:border-indigo-200 hover:shadow-md hover:scale-[1.01]"
-          }`}
+                ? "bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 shadow-md"
+                : "bg-white border-slate-200 hover:border-indigo-200 hover:shadow-md hover:scale-[1.01]"
+            }`}
           onClick={() => setSelectedDate(dateStr)}
         >
           {(isToday || isSelected) && (
             <div
-              className={`absolute top-0 right-0 w-16 h-16 ${
-                isSelected ? "bg-indigo-400/10" : "bg-amber-400/10"
-              } rounded-bl-full`}
+              className={`absolute top-0 right-0 w-16 h-16 ${isSelected ? "bg-indigo-400/10" : "bg-amber-400/10"
+                } rounded-bl-full`}
             />
           )}
 
           <div className="flex justify-between items-start mb-2 relative z-10">
             <span
-              className={`text-lg font-bold transition-colors ${
-                isToday
+              className={`text-lg font-bold transition-colors ${isToday
                   ? "text-amber-600"
                   : isSelected
-                  ? "text-indigo-600"
-                  : "text-slate-700 group-hover:text-indigo-600"
-              }`}
+                    ? "text-indigo-600"
+                    : "text-slate-700 group-hover:text-indigo-600"
+                }`}
             >
               {day}
             </span>
             {dayFirs.length > 0 && (
               <div
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold shadow-sm ${
-                  isSelected
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold shadow-sm ${isSelected
                     ? "bg-indigo-500 text-white"
                     : "bg-gradient-to-r from-slate-100 to-slate-200 text-slate-700"
-                }`}
+                  }`}
               >
                 <FileText className="w-3 h-3" />
                 {dayFirs.length}
@@ -796,31 +791,28 @@ export default function FIRCalendar() {
       return (
         <div
           key={i}
-          className={`flex-1 border-r last:border-r-0 transition-all ${
-            isSelected ? "bg-gradient-to-b from-indigo-50 to-white" : ""
-          }`}
+          className={`flex-1 border-r last:border-r-0 transition-all ${isSelected ? "bg-gradient-to-b from-indigo-50 to-white" : ""
+            }`}
         >
           <div
-            className={`p-4 border-b-2 transition-colors cursor-pointer ${
-              isToday
+            className={`p-4 border-b-2 transition-colors cursor-pointer ${isToday
                 ? "border-amber-400 bg-gradient-to-br from-amber-50 to-orange-50"
                 : isSelected
-                ? "border-indigo-400 bg-gradient-to-br from-indigo-50 to-blue-50"
-                : "border-slate-200 bg-slate-50 hover:bg-slate-100"
-            }`}
+                  ? "border-indigo-400 bg-gradient-to-br from-indigo-50 to-blue-50"
+                  : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+              }`}
             onClick={() => setSelectedDate(dateStr)}
           >
             <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
               {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][i]}
             </div>
             <div
-              className={`text-2xl font-black ${
-                isToday
+              className={`text-2xl font-black ${isToday
                   ? "text-amber-600"
                   : isSelected
-                  ? "text-indigo-600"
-                  : "text-slate-800"
-              }`}
+                    ? "text-indigo-600"
+                    : "text-slate-800"
+                }`}
             >
               {dateObj.getDate()}
             </div>
@@ -892,11 +884,10 @@ export default function FIRCalendar() {
     return (
       <div className="space-y-6">
         <div
-          className={`p-6 rounded-2xl shadow-xl relative overflow-hidden ${
-            isToday
+          className={`p-6 rounded-2xl shadow-xl relative overflow-hidden ${isToday
               ? "bg-gradient-to-br from-amber-500 via-orange-500 to-red-500"
               : "bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600"
-          }`}
+            }`}
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
           <div className="relative z-10">
@@ -1174,11 +1165,10 @@ export default function FIRCalendar() {
                       <button
                         key={view}
                         onClick={() => setCurrentView(view)}
-                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
-                          currentView === view
+                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${currentView === view
                             ? "bg-white text-indigo-600 shadow-md scale-105"
                             : "text-slate-600 hover:text-slate-800 hover:bg-slate-50"
-                        }`}
+                          }`}
                       >
                         <Icon className="w-4 h-4" />
                         <span className="capitalize hidden sm:inline">
@@ -1300,180 +1290,133 @@ export default function FIRCalendar() {
             setRemarks("");
           }}
         >
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4">
             {selectedFir && (
               <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
+                <DialogHeader className="pb-2">
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4 text-primary" />
                     {selectedFir.firNumber}
+                    <StatusBadge status={selectedFir.status} />
+                    <PriorityBadge priority={selectedFir.priority} />
                   </DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-6 mt-2">
-                  {/* FIR Details */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="p-3 bg-slate-50 rounded-xl">
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Complainant
-                      </p>
-                      <p className="font-bold text-slate-800">
-                        {selectedFir.complainantName}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {selectedFir.complainantEmail}
+                <div className="space-y-3">
+                  {/* FIR Details - Compact 3-col grid */}
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="p-2 bg-slate-50 rounded-lg">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase">Complainant</p>
+                      <p className="font-bold text-slate-800 text-xs truncate">{selectedFir.complainantName}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{selectedFir.complainantEmail}</p>
+                    </div>
+                    <div className="p-2 bg-slate-50 rounded-lg">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase">Incident Type</p>
+                      <p className="font-bold text-slate-800 text-xs">{selectedFir.incidentType}</p>
+                    </div>
+                    {selectedFir.location && (
+                      <div className="p-2 bg-slate-50 rounded-lg">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase">Location</p>
+                        <p className="text-xs text-slate-700 truncate">{selectedFir.location}</p>
+                      </div>
+                    )}
+                    <div className="p-2 bg-slate-50 rounded-lg">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase">Filed On</p>
+                      <p className="font-medium text-slate-700 text-[11px]">
+                        {formatDateTime(selectedFir.createdAt || selectedFir.incidentDate)}
                       </p>
                     </div>
-                    <div className="p-3 bg-slate-50 rounded-xl">
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Incident Type
-                      </p>
-                      <p className="font-bold text-slate-800">
-                        {selectedFir.incidentType}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl">
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Status
-                      </p>
-                      <StatusBadge status={selectedFir.status} />
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl">
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Priority
-                      </p>
-                      <PriorityBadge priority={selectedFir.priority} />
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl">
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Filed On
-                      </p>
-                      <p className="font-medium text-slate-700 text-xs">
-                        {formatDateTime(
-                          selectedFir.createdAt || selectedFir.incidentDate
-                        )}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl">
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-1">
-                        Incident Date
-                      </p>
-                      <p className="font-medium text-slate-700 text-xs">
-                        {formatDateTime(
-                          selectedFir.incidentDate || selectedFir.dateTime
-                        )}
+                    <div className="p-2 bg-slate-50 rounded-lg">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase">Incident Date</p>
+                      <p className="font-medium text-slate-700 text-[11px]">
+                        {formatDateTime(selectedFir.incidentDate || selectedFir.dateTime)}
                       </p>
                     </div>
                   </div>
 
-                  {/* Location */}
-                  {selectedFir.location && (
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-2">
-                        Location
-                      </p>
-                      <p className="text-sm text-slate-700">
-                        {selectedFir.location}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Description */}
-                  <div className="p-4 bg-slate-50 rounded-xl">
-                    <p className="text-xs font-semibold text-slate-500 uppercase mb-2">
-                      Description
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {/* Description - Collapsible max height */}
+                  <div className="p-2.5 bg-slate-50 rounded-lg">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Description</p>
+                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[80px] overflow-y-auto">
                       {selectedFir.description}
                     </p>
                   </div>
 
-                  {/* Remarks */}
+                  {/* Remarks - Inline */}
                   {selectedFir.remarks && (
-                    <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
-                      <p className="text-xs font-semibold text-amber-600 uppercase mb-2">
-                        Remarks
-                      </p>
-                      <p className="text-sm text-amber-800">
-                        {selectedFir.remarks}
-                      </p>
+                    <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 flex items-start gap-2">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[10px] font-semibold text-amber-600 uppercase">Remarks</p>
+                        <p className="text-xs text-amber-800">{selectedFir.remarks}</p>
+                      </div>
                     </div>
                   )}
 
-                  {/* ✅ EVIDENCE FILES (Now available in Calendar) */}
-                  {selectedFir.evidenceFiles &&
-                    selectedFir.evidenceFiles.length > 0 && (
-                      <div className="p-4 bg-slate-50 rounded-xl">
-                        <EvidenceFiles files={selectedFir.evidenceFiles} />
-                      </div>
-                    )}
+                  {/* Evidence Files */}
+                  {selectedFir.evidenceFiles && selectedFir.evidenceFiles.length > 0 && (
+                    <div className="p-2.5 bg-slate-50 rounded-lg">
+                      <EvidenceFiles files={selectedFir.evidenceFiles} />
+                    </div>
+                  )}
 
-                  {/* Update Status */}
+                  {/* Update Status - Compact Side-by-Side */}
                   <div className="border-t pt-4">
-                    <h4 className="font-semibold text-sm text-slate-800 mb-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
                       Update Status
                     </h4>
 
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label>New Status</Label>
-                        <Select
-                          value={newStatus}
-                          onValueChange={(v) => setNewStatus(v as FIRStatus)}
-                        >
-                          <SelectTrigger>
+                        <Label className="text-xs text-slate-500 mb-1 block">New Status</Label>
+                        <Select value={newStatus} onValueChange={(v) => setNewStatus(v as FIRStatus)}>
+                          <SelectTrigger className="h-9 text-sm">
                             <SelectValue placeholder="Select Status" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="APPROVED">Approve</SelectItem>
                             <SelectItem value="REJECTED">Reject</SelectItem>
-                            <SelectItem value="UNDER_INVESTIGATION">
-                              Under Investigation
-                            </SelectItem>
-                            <SelectItem value="IN_PROGRESS">
-                              In Progress
-                            </SelectItem>
+                            <SelectItem value="UNDER_INVESTIGATION">Under Investigation</SelectItem>
+                            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                             <SelectItem value="CLOSED">Closed</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-
                       <div>
-                        <Label>
-                          {newStatus === "REJECTED"
-                            ? "Rejection Reason"
-                            : "Remarks / Action Note (Optional)"}
+                        <Label className="text-xs text-slate-500 mb-1 block">
+                          {newStatus === "REJECTED" ? "Rejection Reason" : "Remarks (Optional)"}
                         </Label>
                         <Textarea
-                          placeholder={
-                            newStatus === "REJECTED"
-                              ? "Please provide the reason for rejection..."
-                              : "Add any notes or remarks..."
-                          }
+                          placeholder={newStatus === "REJECTED" ? "Reason for rejection..." : "Add notes..."}
                           value={remarks}
                           onChange={(e) => setRemarks(e.target.value)}
-                          rows={3}
+                          rows={1}
+                          className="min-h-[36px] max-h-[80px] text-sm resize-y"
                         />
                       </div>
+                    </div>
 
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedFir(null);
-                            setNewStatus("");
-                            setRemarks("");
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleUpdateStatus}
-                          disabled={isUpdating || !newStatus}
-                        >
-                          {isUpdating ? "Saving..." : "Save Changes"}
-                        </Button>
-                      </div>
+                    <div className="flex justify-end gap-2 mt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-4"
+                        onClick={() => {
+                          setSelectedFir(null);
+                          setNewStatus("");
+                          setRemarks("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-9 px-5"
+                        onClick={handleUpdateStatus}
+                        disabled={isUpdating || !newStatus}
+                      >
+                        {isUpdating ? "Saving..." : "Save Changes"}
+                      </Button>
                     </div>
                   </div>
                 </div>

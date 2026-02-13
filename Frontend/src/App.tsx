@@ -39,22 +39,8 @@ const App = () => (
             <Route path="/police/dashboard" element={<ProtectedRoute allowedRoles={["police"]}><PoliceDashboard /></ProtectedRoute>} />
             <Route path="/police/firs" element={<ProtectedRoute allowedRoles={["police"]}><PoliceDashboard /></ProtectedRoute>} />
             <Route path="/police/rules" element={<ProtectedRoute allowedRoles={["police"]}><PoliceRules /></ProtectedRoute>} />
-            <Route
-              path="/police/calendar"
-              element={
-                <ProtectedRoute allowedRoles={["police"]}>
-                  <FIRCalendar />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/police/chat"
-              element={
-                <ProtectedRoute allowedRoles={["police"]}>
-                  <PoliceChat />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/police/calendar" element={<ProtectedRoute allowedRoles={["police"]}><FIRCalendar /></ProtectedRoute>} />
+            <Route path="/police/chat" element={<ProtectedRoute allowedRoles={["police"]}><PoliceChat /></ProtectedRoute>} />
             <Route path="/police/users" element={<ProtectedRoute allowedRoles={["police"]}><PoliceDashboard /></ProtectedRoute>} />
             <Route path="/admin/dashboard/*" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
