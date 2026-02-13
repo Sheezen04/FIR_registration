@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Shield, FileText, Search, Users, ArrowRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroBg from "@/assets/hero-bg.jpg";
+import ashokPiller from "@/assets/ashok.jpg";
 
 const features = [
   { icon: FileText, title: "Online FIR Filing", desc: "Submit First Information Reports from anywhere, anytime with our secure digital platform." },
@@ -23,9 +24,14 @@ export default function LandingPage() {
       <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2">
-            <Shield className="h-7 w-7 text-accent" />
-            <span className="text-lg font-bold text-primary">FIR System</span>
-          </Link>
+  <img
+    src={ashokPiller}
+    alt="Ashok Pillar Logo"
+    className="h-12 w-auto object-contain"
+  />
+  <span className="text-lg font-bold text-primary">FIR System</span>
+</Link>
+
           <div className="flex items-center gap-3">
             <Link to="/login">
               <Button variant="ghost" size="sm">Login</Button>
@@ -66,9 +72,23 @@ export default function LandingPage() {
                 </Button>
               </Link>
               <Link to="/login">
-                <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 text-base px-8">
-                  Track Your FIR
-                </Button>
+                <Button
+  size="lg"
+  className="
+    bg-blue-600 
+    text-white 
+    border border-blue-600
+    hover:bg-amber-500 
+    hover:border-amber-500
+    hover:text-black
+    transition-all duration-300
+    text-base px-8
+  "
+>
+  Track Your FIR
+</Button>
+
+
               </Link>
             </div>
           </div>
@@ -117,7 +137,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Demo Credentials */}
+      {/* Demo Credentials
       <section className="py-16 bg-background">
         <div className="container mx-auto px-4">
           <div className="mx-auto max-w-2xl rounded-xl border bg-card p-8 text-center">
@@ -139,16 +159,20 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
+
+      
+
+      
 
       {/* Footer */}
-      <footer className="gradient-navy py-8">
+      <footer className="gradient-white py-8">
         <div className="container mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Shield className="h-5 w-5 text-accent" />
-            <span className="font-semibold text-white">Online FIR System</span>
+            <img src={ashokPiller} alt="Ashok Logo" className="h-8 w-auto object-contain"/>
+            <span className="font-semibold text-grey">Online FIR System</span>
           </div>
-          <p className="text-sm text-white/50">© 2026 FIR Registration & Management System. All rights reserved.</p>
+          <p className="text-sm text-grey/50">© 2026 FIR Registration & Management System. All rights reserved.</p>
         </div>
       </footer>
     </div>
