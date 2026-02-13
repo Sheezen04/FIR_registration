@@ -55,11 +55,11 @@ const navItems = [
     href: "/police/calendar",
     icon: <Calendar className="h-4 w-4" />,
   },
-  {
-    label: "Chat",
-    href: "/police/chat",
-    icon: <MessageCircle className="h-4 w-4" />
-  },
+  // {
+  //   label: "Chat",
+  //   href: "/police/chat",
+  //   icon: <MessageCircle className="h-4 w-4" />
+  // },
   {
     label: "Rules & Laws",
     href: "/police/rules",

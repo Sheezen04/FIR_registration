@@ -3,8 +3,8 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { StatusBadge, PriorityBadge } from "@/components/StatusBadge";
 import { INCIDENT_TYPES } from "@/data/firData";
 import { useAuth } from "@/contexts/AuthContext";
-import { firApi, FIRResponse, FIRRequest } from "@/services/api";
-import { FileText, Plus, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { firApi, fileApi, FIRResponse, FIRRequest } from "@/services/api";
+import { FileText, Plus, Clock, CheckCircle, XCircle, AlertTriangle, Paperclip, Download, Eye, FileImage, File as FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,30 @@ const mapStatus = (status: string): string => {
 
 const mapPriority = (priority: string): string => {
   return priority.toLowerCase();
+};
+
+// File helper functions
+const getFileExtension = (filePath: string): string => {
+  const name = filePath.split("/").pop() || filePath;
+  return name.split(".").pop()?.toLowerCase() || "";
+};
+
+const getFileName = (filePath: string): string => {
+  return filePath.split("/").pop() || filePath;
+};
+
+const getFileType = (filePath: string): "image" | "pdf" | "doc" | "other" => {
+  const ext = getFileExtension(filePath);
+  if (["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg"].includes(ext)) return "image";
+  if (ext === "pdf") return "pdf";
+  if (["doc", "docx", "odt", "rtf", "txt"].includes(ext)) return "doc";
+  return "other";
+};
+
+const getFileUrl = (filePath: string): string => {
+  if (filePath.startsWith("http")) return filePath;
+  if (filePath.startsWith("uploads/")) return `/${filePath}`;
+  return `/uploads/${filePath}`;
 };
 
 export default function CitizenDashboard() {
@@ -73,12 +97,24 @@ export default function CitizenDashboard() {
     
     try {
       const fd = new FormData(e.currentTarget);
+      
+      // Handle file uploads first
+      const fileInput = e.currentTarget.querySelector('input[type="file"]') as HTMLInputElement;
+      let evidenceFilePaths: string[] = [];
+      
+      if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        const files = Array.from(fileInput.files);
+        const uploadResponse = await fileApi.upload(files);
+        evidenceFilePaths = uploadResponse.data;
+      }
+      
       const request: FIRRequest = {
         incidentType: fd.get("incidentType") as string,
         description: fd.get("description") as string,
         dateTime: fd.get("dateTime") as string,
         priority: fd.get("priority") as Priority,
         location: fd.get("location") as string,
+        evidenceFiles: evidenceFilePaths,
       };
       
       const response = await firApi.create(request);
@@ -237,6 +273,43 @@ export default function CitizenDashboard() {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                {/* Evidence Files */}
+                {selectedFir.evidenceFiles && selectedFir.evidenceFiles.length > 0 && (
+                  <div className="pt-2 border-t">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">Evidence Files ({selectedFir.evidenceFiles.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {selectedFir.evidenceFiles.map((filePath, idx) => {
+                        const fileName = getFileName(filePath);
+                        const fileType = getFileType(filePath);
+                        const fileUrl = getFileUrl(filePath);
+                        
+                        return (
+                          <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                            {fileType === "image" ? (
+                              <FileImage className="h-4 w-4 text-green-500 shrink-0" />
+                            ) : (
+                              <FileIcon className="h-4 w-4 text-blue-500 shrink-0" />
+                            )}
+                            <span className="flex-1 text-sm truncate">{fileName}</span>
+                            <div className="flex gap-1">
+                              {fileType === "image" && (
+                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded hover:bg-background">
+                                  <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                </a>
+                              )}
+                              <a href={fileUrl} download={fileName} className="p-1.5 rounded hover:bg-background">
+                                <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

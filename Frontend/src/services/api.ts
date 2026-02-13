@@ -154,4 +154,24 @@ export const userApi = {
   getPoliceOfficers: () => api.get<UserResponse[]>('/admin/users/police'),
 };
 
+// File Upload API
+export const fileApi = {
+  upload: (files: File[]) => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+    return api.post<string[]>('/files/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  getDownloadUrl: (filePath: string) => {
+    // Extract filename from path like "uploads/filename.jpg"
+    const filename = filePath.replace('uploads/', '');
+    return `/api/files/download/${filename}`;
+  },
+};
+
 export default api;
