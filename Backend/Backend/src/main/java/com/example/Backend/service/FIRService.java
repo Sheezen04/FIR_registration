@@ -4,7 +4,13 @@ import com.example.Backend.dto.*;
 import com.example.Backend.entity.*;
 import com.example.Backend.repository.FIRRepository;
 import com.example.Backend.repository.UserRepository;
+import com.example.Backend.specification.FIRSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +53,40 @@ public class FIRService {
         return firRepository.findAll().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    public PagedResponse<FIRResponse> getPaginatedFIRs(
+            int page,
+            int size,
+            String search,
+            String complainant,
+            String status,
+            String priority,
+            String incidentType,
+            String dateFilter
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Specification<FIR> spec = FIRSpecification.withFilters(
+                search, complainant, status, priority, incidentType, dateFilter
+        );
+        
+        Page<FIR> firPage = firRepository.findAll(spec, pageable);
+        
+        List<FIRResponse> content = firPage.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        
+        return PagedResponse.<FIRResponse>builder()
+                .content(content)
+                .page(firPage.getNumber())
+                .size(firPage.getSize())
+                .totalElements(firPage.getTotalElements())
+                .totalPages(firPage.getTotalPages())
+                .hasNext(firPage.hasNext())
+                .hasPrevious(firPage.hasPrevious())
+                .isFirst(firPage.isFirst())
+                .isLast(firPage.isLast())
+                .build();
     }
 
     public List<FIRResponse> getFIRsByUser(User user) {

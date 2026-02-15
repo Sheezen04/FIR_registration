@@ -3,7 +3,8 @@ import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardLayout from "@/components/DashboardLayout";
 import { StatusBadge, PriorityBadge } from "@/components/StatusBadge";
-import { firApi, FIRResponse, UpdateFIRStatusRequest } from "@/services/api";
+import { firApi, FIRResponse, UpdateFIRStatusRequest, FIRFilterParams, PagedResponse } from "@/services/api";
+import { useInfiniteScroll, useDebouncedValue } from "@/hooks/use-infinite-scroll";
 import {
   FileText,
   Shield,
@@ -35,6 +36,7 @@ import {
   AlertTriangle,
   Pin,
   PinOff,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -480,6 +482,13 @@ export default function PoliceDashboard() {
   const [remarks, setRemarks] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // ── PAGINATION STATE ──
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalElements, setTotalElements] = useState(0);
+  const PAGE_SIZE = 5;
 
   // ── VIEW STATE ──
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -514,27 +523,70 @@ export default function PoliceDashboard() {
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
 
+  // ── DEBOUNCED FILTER VALUES (for backend calls) ──
+  const debouncedSearch = useDebouncedValue(searchQuery, 400);
+  const debouncedComplainant = useDebouncedValue(complainantFilter, 400);
+
   // ── Persist pinned IDs ──
   useEffect(() => {
     localStorage.setItem("pinnedFirIds", JSON.stringify(Array.from(pinnedIds)));
   }, [pinnedIds]);
 
-  useEffect(() => {
-    loadFIRs();
-  }, []);
-
-  const loadFIRs = async () => {
+  // ── Load FIRs with pagination (reset when filters change) ──
+  const loadFIRs = useCallback(async (page: number = 0, append: boolean = false) => {
     try {
-      setIsLoading(true);
-      const response = await firApi.getAll();
-      setFirs(response.data);
+      if (page === 0) {
+        setIsLoading(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      const params: FIRFilterParams = {
+        page,
+        size: PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        complainant: debouncedComplainant || undefined,
+        status: statusFilter !== "ALL" ? statusFilter : undefined,
+        priority: priorityFilter !== "ALL" ? priorityFilter : undefined,
+        incidentType: typeFilter !== "ALL" ? typeFilter : undefined,
+        dateFilter: dateFilter || undefined,
+      };
+
+      const response = await firApi.getPaginated(params);
+      const { content, hasNext, totalElements: total } = response.data;
+
+      if (append) {
+        setFirs(prev => [...prev, ...content]);
+      } else {
+        setFirs(content);
+      }
+
+      setHasMore(hasNext);
+      setTotalElements(total);
+      setCurrentPage(page);
     } catch (error) {
       console.error("❌ Failed to load FIRs:", error);
       toast({ title: "Error", description: "Failed to load FIRs", variant: "destructive" });
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
-  };
+  }, [debouncedSearch, debouncedComplainant, statusFilter, priorityFilter, typeFilter, dateFilter, toast]);
+
+  // ── Initial load and reload on filter changes ──
+  useEffect(() => {
+    loadFIRs(0, false);
+  }, [loadFIRs]);
+
+  // ── Load more callback for infinite scroll ──
+  const loadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore) {
+      loadFIRs(currentPage + 1, true);
+    }
+  }, [currentPage, hasMore, isLoadingMore, loadFIRs]);
+
+  // ── Infinite scroll sentinel ref ──
+  const sentinelRef = useInfiniteScroll(loadMore, hasMore, isLoading || isLoadingMore);
 
   const handleUpdateStatus = async () => {
     if (!selectedFir || !newStatus) return;
@@ -664,6 +716,7 @@ export default function PoliceDashboard() {
     setStatusFilter("ALL");
     setPriorityFilter("ALL");
     setTypeFilter("ALL");
+    // Pagination is automatically reset when filters change via useEffect
   };
 
   const uniqueTypes = useMemo(() => {
@@ -671,27 +724,18 @@ export default function PoliceDashboard() {
     return Array.from(types).sort();
   }, [firs]);
 
+  // Backend handles filtering, so filteredFIRs is just the firs from API
+  // We still sort pinned items to top for display
   const filteredFIRs = useMemo(() => {
-    let filtered = firs;
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (fir) =>
-          fir.firNumber.toLowerCase().includes(query) ||
-          fir.description?.toLowerCase().includes(query) ||
-          fir.location?.toLowerCase().includes(query)
-      );
-    }
-    if (complainantFilter.trim()) {
-      const query = complainantFilter.toLowerCase();
-      filtered = filtered.filter((fir) => fir.complainantName.toLowerCase().includes(query));
-    }
-    if (dateFilter) filtered = filtered.filter((fir) => getDateKey(getFirDate(fir)) === dateFilter);
-    if (statusFilter !== "ALL") filtered = filtered.filter((fir) => fir.status === statusFilter);
-    if (priorityFilter !== "ALL") filtered = filtered.filter((fir) => fir.priority === priorityFilter);
-    if (typeFilter !== "ALL") filtered = filtered.filter((fir) => fir.incidentType === typeFilter);
-    return filtered.sort((a, b) => new Date(getFirDate(b)).getTime() - new Date(getFirDate(a)).getTime());
-  }, [firs, searchQuery, complainantFilter, dateFilter, statusFilter, priorityFilter, typeFilter]);
+    return [...firs].sort((a, b) => {
+      // Pinned items first
+      const aPinned = pinnedIds.has(a.id) ? 1 : 0;
+      const bPinned = pinnedIds.has(b.id) ? 1 : 0;
+      if (bPinned !== aPinned) return bPinned - aPinned;
+      // Then by date descending
+      return new Date(getFirDate(b)).getTime() - new Date(getFirDate(a)).getTime();
+    });
+  }, [firs, pinnedIds]);
 
   // ✅ UPDATED: Separate "Pinned" FIRs into their own group at the top
   const groupedFIRs: GroupedFIRs[] = useMemo(() => {
@@ -772,13 +816,13 @@ export default function PoliceDashboard() {
   }, [filteredFIRs, pinnedIds]);
 
   const stats = {
-    total: firs.length,
+    total: totalElements,
     pending: firs.filter((f) => f.status === "PENDING").length,
     active: firs.filter((f) => ["APPROVED", "UNDER_INVESTIGATION", "IN_PROGRESS"].includes(f.status)).length,
     closed: firs.filter((f) => ["CLOSED", "REJECTED"].includes(f.status)).length,
   };
 
-  const hasActiveFilters = complainantFilter || statusFilter !== "ALL" || priorityFilter !== "ALL" || typeFilter !== "ALL" || dateFilter;
+  const hasActiveFilters = debouncedSearch || complainantFilter || statusFilter !== "ALL" || priorityFilter !== "ALL" || typeFilter !== "ALL" || dateFilter;
 
   return (
     <DashboardLayout title="Police Station Portal" navItems={navItems}>
@@ -817,12 +861,19 @@ export default function PoliceDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="hidden md:flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                  {filteredFIRs.length}
+                  {totalElements}
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filtered FIRs</span>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    {hasActiveFilters ? "Filtered FIRs" : "FIRs"}
+                  </span>
                   <span className="text-sm font-medium text-slate-800">
-                    Showing {filteredFIRs.length} of {firs.length}
+                    {/* {totalElements} */}
+                    {/* {hasMore && (
+                      <span className="ml-2 text-slate-400">
+                        · scroll for more
+                      </span>
+                    )} */}
                     {pinnedIds.size > 0 && (
                       <span className="ml-2 text-indigo-600">
                         · {pinnedIds.size} pinned
@@ -1085,6 +1136,31 @@ export default function PoliceDashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── INFINITE SCROLL SENTINEL & LOAD MORE INDICATOR ── */}
+          {!isLoading && firs.length > 0 && (
+            <div className="py-4">
+              {isLoadingMore ? (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                  <span className="text-sm text-slate-500">Loading more FIRs...</span>
+                </div>
+              ) : hasMore ? (
+                <div 
+                  ref={sentinelRef} 
+                  className="h-10 flex items-center justify-center"
+                >
+                  <span className="text-xs text-slate-400">Scroll for more</span>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <span className="text-xs text-slate-400">
+                    All {totalElements} FIRs loaded
+                  </span>
                 </div>
               )}
             </div>

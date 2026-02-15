@@ -35,6 +35,23 @@ public class FIRController {
         return ResponseEntity.ok(firService.getAllFIRs());
     }
 
+    @GetMapping("/paginated")
+    @PreAuthorize("hasRole('POLICE') or hasRole('ADMIN')")
+    public ResponseEntity<PagedResponse<FIRResponse>> getPaginatedFIRs(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String complainant,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String incidentType,
+            @RequestParam(required = false) String dateFilter
+    ) {
+        return ResponseEntity.ok(firService.getPaginatedFIRs(
+                page, size, search, complainant, status, priority, incidentType, dateFilter
+        ));
+    }
+
     @GetMapping("/my")
     public ResponseEntity<List<FIRResponse>> getMyFIRs(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(firService.getFIRsByUser(user));

@@ -123,6 +123,30 @@ export interface DashboardStats {
   firsByStatus: Record<string, number>;
 }
 
+// Paginated Response Types
+export interface PagedResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+}
+
+export interface FIRFilterParams {
+  page?: number;
+  size?: number;
+  search?: string;
+  complainant?: string;
+  status?: string;
+  priority?: string;
+  incidentType?: string;
+  dateFilter?: string;
+}
+
 // Auth API
 export const authApi = {
   login: (data: LoginRequest) => api.post<AuthResponse>('/auth/login', data),
@@ -133,6 +157,18 @@ export const authApi = {
 export const firApi = {
   create: (data: FIRRequest) => api.post<FIRResponse>('/fir', data),
   getAll: () => api.get<FIRResponse[]>('/fir'),
+  getPaginated: (params: FIRFilterParams = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.size !== undefined) queryParams.append('size', params.size.toString());
+    if (params.search) queryParams.append('search', params.search);
+    if (params.complainant) queryParams.append('complainant', params.complainant);
+    if (params.status && params.status !== 'ALL') queryParams.append('status', params.status);
+    if (params.priority && params.priority !== 'ALL') queryParams.append('priority', params.priority);
+    if (params.incidentType && params.incidentType !== 'ALL') queryParams.append('incidentType', params.incidentType);
+    if (params.dateFilter) queryParams.append('dateFilter', params.dateFilter);
+    return api.get<PagedResponse<FIRResponse>>(`/fir/paginated?${queryParams.toString()}`);
+  },
   getMy: () => api.get<FIRResponse[]>('/fir/my'),
   getById: (id: number) => api.get<FIRResponse>(`/fir/${id}`),
   getByNumber: (firNumber: string) => api.get<FIRResponse>(`/fir/number/${firNumber}`),
