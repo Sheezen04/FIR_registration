@@ -76,11 +76,11 @@ export default function LoginPage() {
               Don't have an account?{" "}
               <Link to="/register" className="font-medium text-primary hover:underline">Register here</Link>
             </p>
-            <p>
+            {/* <p>
               <Link to="/police" className="font-medium text-primary hover:underline">Police Portal</Link>
               {" | "}
               <Link to="/admin" className="font-medium text-primary hover:underline">Admin Portal</Link>
-            </p>
+            </p> */}
           </div>
         </div>
       </div>
