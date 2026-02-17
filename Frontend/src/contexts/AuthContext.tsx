@@ -20,6 +20,7 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   login: (
     email: string,
     password: string,
@@ -231,6 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         token,
+        setUser,
         login,
         register,
         registerAdmin,

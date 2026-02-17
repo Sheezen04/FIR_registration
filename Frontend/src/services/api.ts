@@ -99,6 +99,14 @@ export interface UpdateFIRStatusRequest {
   assignedOfficerId?: number;
 }
 
+// ✅ ADDED: Interface for Profile Update
+export interface UpdateProfileRequest {
+  name: string;
+  email: string;
+  currentPassword: string;
+  newPassword?: string;
+}
+
 export interface UserResponse {
   id: number;
   name: string;
@@ -188,6 +196,9 @@ export const userApi = {
     api.post<UserResponse>('/admin/users', data),
   delete: (id: number) => api.delete(`/admin/users/${id}`),
   getPoliceOfficers: () => api.get<UserResponse[]>('/admin/users/police'),
+  
+  // ✅ ADDED: Profile Update Method
+  updateProfile: (data: UpdateProfileRequest) => api.put<UserResponse>('/users/profile', data),
 };
 
 // File Upload API
