@@ -122,7 +122,7 @@ export default function LandingPage() {
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 2 }}
           className="relative z-10 container mx-auto px-4 text-center"
         >
           <div className="mx-auto max-w-3xl">
@@ -132,7 +132,7 @@ export default function LandingPage() {
 
             <h1 className="mb-6 text-4xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl">
               Online FIR Registration &{" "}
-              <span className="bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent animate-pulse">
+              <span className="bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent ">
                 Management System
               </span>
             </h1>
@@ -177,7 +177,7 @@ export default function LandingPage() {
                 key={f.title}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.15 }}
+                transition={{ duration: 1, delay: i * 0.15 }}
                 viewport={{ once: true }}
                 className="group relative rounded-xl border bg-card p-6 transition-all duration-300 
                 hover:-translate-y-3 hover:shadow-2xl hover:border-accent/40"
@@ -209,7 +209,7 @@ export default function LandingPage() {
                 key={s.num}
                 initial={{ opacity: 0, scale: 0.8 }}
                 whileInView={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: i * 0.2 }}
+                transition={{ duration: 1, delay: i * 0.2 }}
                 viewport={{ once: true }}
                 className="text-center"
               >
