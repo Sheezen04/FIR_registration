@@ -27,8 +27,9 @@ public class AuthService {
 
         User user = new User();
         user.setName(request.getName());
-        user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setEmail(request.getEmail().trim());
+        // Trim password to ensure consistent handling
+        user.setPassword(passwordEncoder.encode(request.getPassword().trim()));
         user.setRole(request.getRole() != null ? request.getRole() : Role.CITIZEN);
         user.setStation(request.getStation());
 
@@ -47,11 +48,15 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
+        // Trim email and password for consistent handling
+        String email = request.getEmail().trim();
+        String password = request.getPassword().trim();
+        
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+                new UsernamePasswordAuthenticationToken(email, password)
         );
 
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Verify role matches if specified
