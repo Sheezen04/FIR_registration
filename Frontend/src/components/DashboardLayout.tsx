@@ -326,7 +326,7 @@ export default function DashboardLayout({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password (Optional)</Label>
+              <Label htmlFor="newPassword">New Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -335,7 +335,7 @@ export default function DashboardLayout({
                   placeholder="Min 6 characters"
                   className="pl-9"
                   value={formData.newPassword}
-                  onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}                 
                 />
               </div>
             </div>

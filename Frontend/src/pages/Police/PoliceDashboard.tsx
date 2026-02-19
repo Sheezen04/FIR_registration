@@ -7,9 +7,9 @@ import { firApi, FIRResponse, UpdateFIRStatusRequest, FIRFilterParams } from "@/
 import { useInfiniteScroll, useDebouncedValue } from "@/hooks/use-infinite-scroll";
 import {
   FileText, Shield, CheckCircle, XCircle, Clock, MessageSquare, Users, Calendar,
-  ChevronDown, ChevronRight, Search, Filter, Scale, Paperclip, FileImage, FileIcon,
+  ChevronDown, ChevronRight, ChevronLeft, Search, Filter, Scale, Paperclip, FileImage, FileIcon,
   ZoomIn, ZoomOut, RotateCw, Maximize2, Download, Eye, File, RefreshCcw, LayoutGrid,
-  List, Pin, PinOff, Loader2, AlertTriangle
+  List, Pin, PinOff, Loader2, AlertTriangle, HelpCircle, CheckCircle2, MousePointer2, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -187,6 +187,140 @@ const getDateKey = (dateString: string): string => {
 };
 const getFirDate = (fir: FIRResponse): string => fir.createdAt || fir.dateTime;
 
+// ── ONBOARDING TOUR COMPONENTS (NEW) ──
+
+// 1. Simulates Drag and Drop Animation
+const DragDropSimulation = () => {
+  return (
+    <div className="relative w-full h-48 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden flex items-center justify-center gap-8 p-4">
+      <div className="w-1/3 h-full bg-slate-200/50 rounded border border-dashed border-slate-300 p-2 flex flex-col gap-2">
+        <div className="text-[10px] font-bold text-slate-400 uppercase">Pending</div>
+        <div className="h-2 w-full bg-white rounded opacity-50"></div>
+      </div>
+      <div className="w-1/3 h-full bg-indigo-50/50 rounded border border-dashed border-indigo-200 p-2 flex flex-col gap-2">
+        <div className="text-[10px] font-bold text-indigo-400 uppercase">In Progress</div>
+      </div>
+      <motion.div
+        className="absolute z-10 w-24 h-16 bg-white rounded shadow-lg border-l-4 border-amber-400 p-2 flex flex-col justify-center"
+        initial={{ x: -60, y: 10, rotate: 0 }}
+        animate={{
+          x: [-60, -60, 60, 60, -60], y: [10, -5, -5, 10, 10], scale: [1, 1.05, 1.05, 1, 1],
+          boxShadow: ["0px 2px 5px rgba(0,0,0,0.1)", "0px 10px 20px rgba(0,0,0,0.15)", "0px 10px 20px rgba(0,0,0,0.15)", "0px 2px 5px rgba(0,0,0,0.1)", "0px 2px 5px rgba(0,0,0,0.1)"]
+        }}
+        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <div className="h-2 w-16 bg-slate-200 rounded mb-1"></div>
+        <div className="h-1.5 w-10 bg-slate-100 rounded"></div>
+        <motion.div className="absolute -bottom-4 -right-4 text-slate-800" animate={{ scale: [1, 0.9, 0.9, 1, 1] }} transition={{ duration: 3, repeat: Infinity }}>
+          <MousePointer2 className="fill-slate-800 text-white h-6 w-6" />
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+};
+
+// 2. Simulates Filter Animation
+const FilterSimulation = () => {
+  return (
+    <div className="w-full h-48 bg-slate-900 rounded-lg flex items-center justify-center p-6 relative overflow-hidden">
+      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5 }} className="w-full max-w-sm bg-white rounded-md p-2 flex items-center gap-2 shadow-xl">
+        <Search className="h-4 w-4 text-slate-400" />
+        <div className="h-2 w-24 bg-slate-200 rounded animate-pulse"></div>
+        <div className="ml-auto bg-indigo-600 h-6 w-12 rounded text-[10px] text-white flex items-center justify-center">Find</div>
+      </motion.div>
+      <div className="absolute top-4 left-4 flex gap-2">
+        {["All", "Pending", "Closed"].map((t, i) => (
+          <motion.div key={t} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.2 }} className="px-2 py-1 bg-slate-800 text-slate-300 text-[10px] rounded-full border border-slate-700">{t}</motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Main Onboarding Component
+const PoliceOnboardingTour = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const [currentStep, setCurrentStep] = useState(0);
+  const steps = [
+    {
+      title: "Welcome to the Dashboard",
+      desc: "This is your central command center for managing First Information Reports (FIRs). This guide will briefly show you how to manage status, review evidence, and organize cases.",
+      icon: <LayoutGrid className="h-5 w-5" />,
+      visual: <div className="w-full h-48 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">Police Portal v2.0</div>
+    },
+    {
+      title: "Kanban Board & Status",
+      desc: "Efficiently manage case lifecycles. Drag and drop FIR cards between columns (e.g., from 'Pending' to 'In Progress') to instantly update their status. The database updates automatically.",
+      icon: <MousePointer2 className="h-5 w-5" />,
+      visual: <DragDropSimulation />
+    },
+    {
+      title: "Right-Click Context Menu",
+      desc: "Right-click on any FIR card to access quick actions. You can Pin important cases to the top of your list or jump straight into Review Mode without opening the full details.",
+      icon: <FileText className="h-5 w-5" />,
+      visual: (
+        <div className="relative w-full h-48 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center">
+          <div className="bg-white p-4 rounded shadow-sm border border-slate-200 w-40">
+            <div className="h-2 bg-slate-200 w-full mb-2"></div>
+            <div className="h-2 bg-slate-200 w-2/3"></div>
+          </div>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5, duration: 0.3 }} className="absolute top-1/2 left-1/2 ml-4 bg-slate-800 text-white p-2 rounded shadow-xl text-xs w-32">
+            <div className="p-1 hover:bg-slate-700 rounded cursor-pointer">📌 Pin to Top</div>
+            <div className="p-1 hover:bg-slate-700 rounded cursor-pointer">👁️ Review FIR</div>
+          </motion.div>
+        </div>
+      )
+    },
+    {
+      title: "Advanced Filtering",
+      desc: "Use the filter bar to search by FIR ID, Complainant Name, or Date. You can also filter by Priority (Emergency, High) to focus on what matters most right now.",
+      icon: <Search className="h-5 w-5" />,
+      visual: <FilterSimulation />
+    }
+  ];
+
+  const handleNext = () => { if (currentStep < steps.length - 1) setCurrentStep(c => c + 1); else onClose(); };
+  const handlePrev = () => { if (currentStep > 0) setCurrentStep(c => c - 1); };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row max-h-[90vh]">
+          {/* Sidebar */}
+          <div className="w-full md:w-64 bg-slate-50 border-r border-slate-200 p-6 flex flex-col">
+            <div className="mb-6"><h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-indigo-600" />Quick Guide</h2><p className="text-xs text-slate-500 mt-1">4 steps to mastery</p></div>
+            <div className="flex-1 space-y-2 overflow-y-auto">
+              {steps.map((step, idx) => (
+                <button key={idx} onClick={() => setCurrentStep(idx)} className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all text-sm ${currentStep === idx ? "bg-white shadow-sm ring-1 ring-indigo-200 text-indigo-700 font-medium" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"}`}>
+                  <div className={`shrink-0 ${currentStep === idx ? "text-indigo-600" : "text-slate-400"}`}>{step.icon}</div>
+                  <span>{idx + 1}. {step.title.split(" ")[0]}...</span>
+                  {currentStep > idx && <CheckCircle2 className="h-3.5 w-3.5 ml-auto text-green-500" />}
+                </button>
+              ))}
+            </div>
+            <div className="mt-6 pt-6 border-t border-slate-200"><div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-2">Rules & Laws</div><div className="bg-indigo-50 rounded p-3 text-xs text-indigo-800 leading-relaxed border border-indigo-100">Always verify evidence before changing status to <strong>Approved</strong>.</div></div>
+          </div>
+          {/* Content */}
+          <div className="flex-1 flex flex-col p-6 md:p-8">
+            <div className="flex justify-between items-start mb-6">
+              <div><h1 className="text-2xl font-bold text-slate-900 mb-2">{steps[currentStep].title}</h1><p className="text-slate-600 text-sm leading-relaxed max-w-lg">{steps[currentStep].desc}</p></div>
+              <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100"><X className="h-5 w-5 text-slate-400" /></Button>
+            </div>
+            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-4 mb-6 relative overflow-hidden group">{steps[currentStep].visual}<div className="absolute bottom-3 right-3 flex gap-1"><div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div><div className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse"></div><div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div></div></div>
+            <div className="flex items-center justify-between pt-2">
+              <div className="flex gap-1">{steps.map((_, i) => (<div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${currentStep === i ? "w-6 bg-indigo-600" : "w-1.5 bg-slate-200"}`} />))}</div>
+              <div className="flex gap-2"><Button variant="outline" onClick={handlePrev} disabled={currentStep === 0} className="gap-2"><ChevronLeft className="h-4 w-4" /> Back</Button><Button onClick={handleNext} className="bg-indigo-600 hover:bg-indigo-700 gap-2 min-w-[100px]">{currentStep === steps.length - 1 ? "Finish" : "Next"}{currentStep !== steps.length - 1 && <ChevronRight className="h-4 w-4" />}</Button></div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+};
+
+// ── END ONBOARDING COMPONENTS ──
+
 interface GroupedFIRs {
   dateKey: string;
   dateLabel: string;
@@ -253,6 +387,7 @@ const ContextMenu = ({ state, onClose, isPinned, onTogglePin, onReview }: { stat
 
 const FIRCard = ({ fir, isPinned, onClick, onContextMenu, onDragStart, onDragEnd }: { fir: FIRResponse; isPinned: boolean; onClick: () => void; onContextMenu: (e: React.MouseEvent, fir: FIRResponse) => void; onDragStart?: (e: React.DragEvent<HTMLDivElement>, fir: FIRResponse) => void; onDragEnd?: () => void; }) => {
   const date = new Date(getFirDate(fir));
+  const isClosed = fir.status === "CLOSED" || fir.status === "REJECTED";
   const getCardPriorityColor = (priority: string) => {
     switch (priority) {
       case "EMERGENCY": return "bg-red-100 text-red-700 border-red-200 animate-pulse";
@@ -264,15 +399,17 @@ const FIRCard = ({ fir, isPinned, onClick, onContextMenu, onDragStart, onDragEnd
   };
   return (
     <div draggable onDragStart={(e) => onDragStart?.(e, fir)} onDragEnd={onDragEnd} onContextMenu={(e) => onContextMenu(e, fir)} className="cursor-grab active:cursor-grabbing">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -2 }} onClick={onClick} className={`bg-white rounded-xl border p-3 shadow-sm hover:shadow-md transition-all relative group pointer-events-auto ${isPinned ? "border-indigo-300 ring-1 ring-indigo-100 bg-indigo-50/30" : "border-slate-200 hover:border-indigo-300"}`}>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -2 }} onClick={onClick} className={`bg-white rounded-xl border p-3 shadow-sm hover:shadow-md transition-all relative group pointer-events-auto ${isPinned ? "border-indigo-300 ring-1 ring-indigo-100 bg-indigo-50/30" : "border-slate-200 hover:border-indigo-300"} ${isClosed ? "opacity-75" : ""}`}>
         {isPinned && <div className="absolute -top-1.5 -left-1.5 z-10"><div className="h-5 w-5 rounded-full bg-indigo-600 flex items-center justify-center shadow-md"><Pin className="h-2.5 w-2.5 text-white rotate-45" /></div></div>}
         <div className="absolute top-2.5 right-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getCardPriorityColor(fir.priority)}`}>{fir.priority}</span></div>
         <div className="flex flex-col gap-2">
-          <div className="flex justify-between items-start pr-16"><h4 className="font-bold text-slate-800 text-sm truncate">{fir.firNumber}</h4></div>
-          <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{fir.description || fir.incidentType}</p>
+          <div className="flex justify-between items-start pr-16">
+            <h4 className={`font-bold text-slate-800 text-sm truncate ${isClosed ? "line-through text-slate-500" : ""}`}>{fir.firNumber}</h4>
+          </div>
+          <p className={`text-xs text-slate-500 line-clamp-2 leading-relaxed ${isClosed ? "line-through text-slate-400" : ""}`}>{fir.description || fir.incidentType}</p>
           <div className="flex items-center gap-2 mt-1">
             <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">{fir.complainantName.charAt(0)}</div>
-            <div className="flex flex-col"><span className="text-[10px] font-medium text-slate-700 truncate max-w-[100px]">{fir.complainantName}</span><span className="text-[9px] text-slate-400">{fir.incidentType}</span></div>
+            <div className="flex flex-col"><span className={`text-[10px] font-medium text-slate-700 truncate max-w-[100px] ${isClosed ? "line-through" : ""}`}>{fir.complainantName}</span><span className="text-[9px] text-slate-400">{fir.incidentType}</span></div>
           </div>
           <div className="pt-2 mt-1 border-t border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-1 text-[10px] text-slate-400"><Clock className="h-3 w-3" />{date.toLocaleDateString()}</div>
@@ -297,6 +434,7 @@ export default function PoliceDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   // ── PAGINATION STATE ──
   const [currentPage, setCurrentPage] = useState(0);
@@ -341,6 +479,47 @@ export default function PoliceDashboard() {
   // ── DEBOUNCED FILTER VALUES ──
   const debouncedSearch = useDebouncedValue(searchQuery, 400);
   const debouncedComplainant = useDebouncedValue(complainantFilter, 400);
+
+  // ── HELPER: GET UNIQUE STORAGE KEY FOR USER ──
+  // This ensures the guide is shown once per unique email login
+  const getUserStorageKey = () => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        // Returns a key like: police_tour_seen_john@example.com
+        return `police_tour_seen_${user.email || user.id || 'guest'}`;
+      }
+    } catch (e) {
+      console.error("Error reading user from storage", e);
+    }
+    return "police_tour_seen_guest";
+  };
+
+  // ── ONBOARDING EFFECT ──
+  useEffect(() => {
+    // Only verify and auto-open if we came specifically from registration (via location state)
+    if (location.state?.newUser) {
+      const storageKey = getUserStorageKey();
+      const hasSeen = localStorage.getItem(storageKey);
+      
+      // If they haven't seen it yet, show it
+      if (!hasSeen) {
+        const timer = setTimeout(() => setIsTourOpen(true), 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [location]);
+
+  const handleCloseTour = () => {
+    setIsTourOpen(false);
+    const storageKey = getUserStorageKey();
+    localStorage.setItem(storageKey, "true");
+  };
+
+  const handleOpenTour = () => {
+    setIsTourOpen(true);
+  };
 
   useEffect(() => {
     localStorage.setItem("pinnedFirIds", JSON.stringify(Array.from(pinnedIds)));
@@ -651,6 +830,8 @@ export default function PoliceDashboard() {
 
   return (
     <DashboardLayout title="Police Station Portal" navItems={navItems}>
+      <PoliceOnboardingTour isOpen={isTourOpen} onClose={handleCloseTour} />
+
       <motion.div key={location.pathname} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
         <div className="space-y-6">
           {/* ── STATS CARDS (Now using accurate DB counts) ── */}
@@ -685,12 +866,16 @@ export default function PoliceDashboard() {
               <div className="flex flex-1 items-center gap-3 justify-end">
                 <div className="relative flex-1 max-w-xl">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input placeholder="Search FIR number, description..." className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                  {/* UPDATED PLACEHOLDER TEXT HERE */}
+                  <Input placeholder="Search FIR #, Name, Description..." className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                 </div>
                 <div className="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center h-11">
                   <Button variant="ghost" size="sm" className={`h-9 w-9 p-0 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700"}`} onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" className={`h-9 w-9 p-0 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700"}`} onClick={() => setViewMode("list")}><List className="h-4 w-4" /></Button>
                 </div>
+                {/* HELP BUTTON TRIGGER */}
+                <Button variant="ghost" size="icon" className="h-11 w-11 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg" onClick={handleOpenTour} title="Start Guide"><HelpCircle className="h-5 w-5" /></Button>
+                
                 <Button variant={showFilters ? "secondary" : "outline"} size="icon" className={`h-11 w-11 shrink-0 rounded-lg border-slate-200 ${showFilters ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-white hover:bg-slate-50"}`} onClick={() => setShowFilters(!showFilters)} title="Toggle Filters"><Filter className="h-4 w-4" /></Button>
               </div>
             </div>
@@ -741,18 +926,21 @@ export default function PoliceDashboard() {
                                 <table className="w-full text-sm">
                                   <thead><tr className="border-b text-left text-slate-500 bg-slate-50/50"><th className="px-4 py-3 font-medium">FIR #</th><th className="px-4 py-3 font-medium">Complainant</th><th className="px-4 py-3 font-medium">Type</th><th className="px-4 py-3 font-medium">Time</th><th className="px-4 py-3 font-medium">Priority</th><th className="px-4 py-3 font-medium">Status</th><th className="px-4 py-3 font-medium">Files</th><th className="px-4 py-3 font-medium">Action</th></tr></thead>
                                   <tbody className="divide-y">
-                                    {group.firs.map((fir) => (
-                                      <tr key={fir.id} onContextMenu={(e) => handleCardContextMenu(e, fir)} className={`transition-colors border-b last:border-0 cursor-context-menu ${pinnedIds.has(fir.id) ? "bg-indigo-50 hover:bg-indigo-100/50" : "bg-white hover:bg-slate-50"}`}>
-                                        <td className="px-4 py-3 font-medium text-slate-800"><div className="flex items-center gap-1.5">{pinnedIds.has(fir.id) && <Pin className="h-3 w-3 text-indigo-500 rotate-45" />}{fir.firNumber}</div></td>
-                                        <td className="px-4 py-3 text-slate-600">{fir.complainantName}</td>
-                                        <td className="px-4 py-3 text-slate-600">{fir.incidentType}</td>
-                                        <td className="px-4 py-3 text-slate-600">{formatTime(getFirDate(fir))}</td>
-                                        <td className="px-4 py-3"><PriorityBadge priority={fir.priority} /></td>
-                                        <td className="px-4 py-3"><StatusBadge status={fir.status} /></td>
-                                        <td className="px-4 py-3">{fir.evidenceFiles && fir.evidenceFiles.length > 0 ? (<Badge variant="outline" className="text-xs gap-1 cursor-pointer hover:bg-slate-100" onClick={() => setSelectedFir(fir)}><Paperclip className="h-3 w-3" /> {fir.evidenceFiles.length}</Badge>) : <span className="text-xs text-slate-400">—</span>}</td>
-                                        <td className="px-4 py-3"><Button variant="ghost" size="sm" onClick={() => setSelectedFir(fir)}><MessageSquare className="mr-1 h-3 w-3" /> Review</Button></td>
-                                      </tr>
-                                    ))}
+                                    {group.firs.map((fir) => {
+                                      const isClosed = fir.status === "CLOSED" || fir.status === "REJECTED";
+                                      return (
+                                        <tr key={fir.id} onContextMenu={(e) => handleCardContextMenu(e, fir)} className={`transition-colors border-b last:border-0 cursor-context-menu ${pinnedIds.has(fir.id) ? "bg-indigo-50 hover:bg-indigo-100/50" : "bg-white hover:bg-slate-50"} ${isClosed ? "opacity-70 bg-slate-50/50" : ""}`}>
+                                          <td className={`px-4 py-3 font-medium text-slate-800 ${isClosed ? "line-through text-slate-500" : ""}`}><div className="flex items-center gap-1.5">{pinnedIds.has(fir.id) && <Pin className="h-3 w-3 text-indigo-500 rotate-45" />}{fir.firNumber}</div></td>
+                                          <td className={`px-4 py-3 text-slate-600 ${isClosed ? "line-through text-slate-400" : ""}`}>{fir.complainantName}</td>
+                                          <td className={`px-4 py-3 text-slate-600 ${isClosed ? "line-through text-slate-400" : ""}`}>{fir.incidentType}</td>
+                                          <td className="px-4 py-3 text-slate-600">{formatTime(getFirDate(fir))}</td>
+                                          <td className="px-4 py-3"><PriorityBadge priority={fir.priority} /></td>
+                                          <td className="px-4 py-3"><StatusBadge status={fir.status} /></td>
+                                          <td className="px-4 py-3">{fir.evidenceFiles && fir.evidenceFiles.length > 0 ? (<Badge variant="outline" className="text-xs gap-1 cursor-pointer hover:bg-slate-100" onClick={() => setSelectedFir(fir)}><Paperclip className="h-3 w-3" /> {fir.evidenceFiles.length}</Badge>) : <span className="text-xs text-slate-400">—</span>}</td>
+                                          <td className="px-4 py-3"><Button variant="ghost" size="sm" onClick={() => setSelectedFir(fir)}><MessageSquare className="mr-1 h-3 w-3" /> Review</Button></td>
+                                        </tr>
+                                      );
+                                    })}
                                     {/* Indication if more items in date group exist but aren't loaded */}
                                     {dateCounts[group.dateKey] > group.firs.length && (
                                         <tr className="bg-slate-50/30">
@@ -810,9 +998,26 @@ export default function PoliceDashboard() {
 
           {/* ── INFINITE SCROLL SENTINEL ── */}
           {!isLoading && firs.length > 0 && (
-            <div className="py-4">
-              {isLoadingMore ? <div className="flex items-center justify-center gap-2 py-4"><Loader2 className="h-4 w-4 animate-spin text-indigo-500" /><span className="text-sm text-slate-500">Loading more FIRs...</span></div> : hasMore ? <div ref={sentinelRef} className="h-10 flex items-center justify-center"><span className="text-xs text-slate-400">Scroll for more</span></div> : <div className="text-center py-4"><span className="text-xs text-slate-400">All FIRs loaded</span></div>}
-            </div>
+            <>
+              {(viewMode === "list" || hasMore || isLoadingMore) && (
+                <div className="py-4">
+                  {isLoadingMore ? (
+                    <div className="flex items-center justify-center gap-2 py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                      <span className="text-sm text-slate-500">Loading more FIRs...</span>
+                    </div>
+                  ) : hasMore ? (
+                    <div ref={sentinelRef} className="h-10 flex items-center justify-center">
+                      <span className="text-xs text-slate-400">Scroll for more</span>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <span className="text-xs text-slate-400">All FIRs loaded</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </motion.div>

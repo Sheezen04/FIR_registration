@@ -40,51 +40,51 @@ export default function LandingPage() {
 
       {/* Header */}
       <header className="fixed top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
-  <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
 
-    {/* Logo */}
-    <Link to="/" className="flex items-center gap-3 group">
-      <img
-        src={ashokPiller}
-        alt="Ashok Pillar Logo"
-        className="h-10 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
-      />
-      <span className="text-lg font-bold text-gray-800 tracking-tight">
-        FIR System
-      </span>
-    </Link>
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-3 group">
+            <img
+              src={ashokPiller}
+              alt="Ashok Pillar Logo"
+              className="h-10 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+            />
+            <span className="text-lg font-bold text-gray-800 tracking-tight">
+              FIR System
+            </span>
+          </Link>
 
-    {/* Navigation Buttons */}
-    <div className="flex items-center gap-4">
+          {/* Navigation Buttons */}
+          <div className="flex items-center gap-4">
 
-      {/* Login Button */}
-       {/* Login Button */}
-      <Link to="/login">
-        <button
-          className="relative text-gray-700 font-medium transition-all duration-300
+            {/* Login Button */}
+            {/* Login Button */}
+            <Link to="/login">
+              <button
+                className="relative text-gray-700 font-medium transition-all duration-300
           after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-0
           after:bg-blue-600 after:transition-all after:duration-300
           hover:text-blue-600 hover:after:w-full"
-        >
-          Login
-        </button>
-      </Link>
+              >
+                Login
+              </button>
+            </Link>
 
-      {/* Register Button */}
-      <Link to="/register">
-        <button
-          className="relative text-gray-700 font-medium transition-all duration-300
+            {/* Register Button */}
+            <Link to="/register">
+              <button
+                className="relative text-gray-700 font-medium transition-all duration-300
           after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-0
           after:bg-blue-600 after:transition-all after:duration-300
           hover:text-blue-600 hover:after:w-full"
-        >
-          Register
-        </button>
-      </Link>
+              >
+                Register
+              </button>
+            </Link>
 
-    </div>
-  </div>
-</header>
+          </div>
+        </div>
+      </header>
 
 
       {/* Hero Section */}
