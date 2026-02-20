@@ -23,14 +23,6 @@ const navItems = [
   { label: "My FIRs", href: "/citizen/history", icon: <Clock className="h-4 w-4" /> },
 ];
 
-const mapStatus = (status: string): string => {
-  return status.toLowerCase().replace(/_/g, "_");
-};
-
-const mapPriority = (priority: string): string => {
-  return priority.toLowerCase();
-};
-
 // File helper functions
 const getFileExtension = (filePath: string): string => {
   const name = filePath.split("/").pop() || filePath;
@@ -85,11 +77,15 @@ export default function CitizenDashboard() {
   const stats = {
     total: firs.length,
     pending: firs.filter((f) => f.status === "PENDING").length,
-    approved: firs.filter((f) => ["APPROVED", "UNDER_INVESTIGATION", "IN_PROGRESS"].includes(f.status)).length,
-    rejected: firs.filter((f) => f.status === "REJECTED").length,
+    active: firs.filter((f) => ["APPROVED", "UNDER_INVESTIGATION", "IN_PROGRESS"].includes(f.status)).length,
+    rejected: firs.filter((f) => f.status === "REJECTED" || f.status === "CLOSED").length,
   };
 
-  const filteredFirs = filter === "all" ? firs : firs.filter((f) => f.status === filter);
+  const filteredFirs = filter === "all" ? firs : firs.filter((f) => {
+    if (filter === "APPROVED") return ["APPROVED", "UNDER_INVESTIGATION", "IN_PROGRESS"].includes(f.status);
+    if (filter === "REJECTED") return f.status === "REJECTED" || f.status === "CLOSED";
+    return f.status === filter;
+  });
 
   const handleSubmitFIR = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -98,7 +94,6 @@ export default function CitizenDashboard() {
     try {
       const fd = new FormData(e.currentTarget);
       
-      // Handle file uploads first
       const fileInput = e.currentTarget.querySelector('input[type="file"]') as HTMLInputElement;
       let evidenceFilePaths: string[] = [];
       
@@ -137,7 +132,7 @@ export default function CitizenDashboard() {
           { label: "Total FIRs", value: stats.total, icon: FileText, color: "text-primary" },
           { label: "Pending", value: stats.pending, icon: Clock, color: "text-warning" },
           { label: "Active", value: stats.approved, icon: CheckCircle, color: "text-success" },
-          { label: "Rejected", value: stats.rejected, icon: XCircle, color: "text-destructive" },
+          { label: "Closed/Rejected", value: stats.rejected, icon: XCircle, color: "text-destructive" },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="flex items-center gap-4 p-4">
@@ -156,7 +151,7 @@ export default function CitizenDashboard() {
       {/* Actions */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-2">
-          {(["all", "PENDING", "APPROVED", "REJECTED", "UNDER_INVESTIGATION", "IN_PROGRESS", "CLOSED"] as const).map((f) => (
+          {(["all", "PENDING", "APPROVED", "REJECTED"] as const).map((f) => (
             <Button
               key={f}
               variant={filter === f ? "default" : "outline"}
@@ -164,7 +159,7 @@ export default function CitizenDashboard() {
               onClick={() => setFilter(f as FIRStatus | "all")}
               className={filter === f ? "gradient-navy text-white" : ""}
             >
-              {f === "all" ? "All" : f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
+              {f === 'all' ? 'All' : f === 'APPROVED' ? 'Active' : f === 'REJECTED' ? 'Closed/Rejected' : 'Pending'}
             </Button>
           ))}
         </div>
@@ -235,86 +230,85 @@ export default function CitizenDashboard() {
       {/* FIR Detail Dialog */}
       <Dialog open={!!selectedFir} onOpenChange={() => setSelectedFir(null)}>
         <DialogContent className="max-w-lg">
-          {selectedFir && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{selectedFir.firNumber}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3 text-sm">
-                <div className="flex gap-2">
-                  <StatusBadge status={selectedFir.status} />
-                  <PriorityBadge priority={selectedFir.priority} />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div><span className="text-muted-foreground">Type:</span> {selectedFir.incidentType}</div>
-                  <div><span className="text-muted-foreground">Date:</span> {new Date(selectedFir.dateTime).toLocaleDateString()}</div>
-                  <div className="col-span-2"><span className="text-muted-foreground">Location:</span> {selectedFir.location}</div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Description:</span>
-                  <p className="mt-1">{selectedFir.description}</p>
-                </div>
-                {selectedFir.assignedOfficer && (
-                  <div><span className="text-muted-foreground">Assigned Officer:</span> {selectedFir.assignedOfficer}</div>
-                )}
-                {selectedFir.remarks && (
-                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3">
-                    <p className="font-medium text-destructive flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> Police Remarks</p>
-                    <p className="mt-1 text-muted-foreground">{selectedFir.remarks}</p>
+          {selectedFir && (() => {
+            const isClosed = selectedFir.status === 'CLOSED' || selectedFir.status === 'REJECTED';
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className={isClosed ? 'line-through text-muted-foreground' : ''}>
+                    {selectedFir.firNumber}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm">
+                  <div className="flex gap-2">
+                    <StatusBadge status={selectedFir.status} />
+                    <PriorityBadge priority={selectedFir.priority} />
                   </div>
-                )}
-                {selectedFir.actionNotes && selectedFir.actionNotes.length > 0 && (
-                  <div>
-                    <p className="font-medium text-foreground mb-1">Action Notes:</p>
-                    <ul className="space-y-1">
-                      {selectedFir.actionNotes.map((note, i) => (
-                        <li key={i} className="flex items-start gap-2 text-muted-foreground">
-                          <CheckCircle className="mt-0.5 h-3 w-3 text-success shrink-0" /> {note}
-                        </li>
-                      ))}
-                    </ul>
+                  <div className={`grid grid-cols-2 gap-2 ${isClosed ? 'line-through text-muted-foreground' : ''}`}>
+                    <div><span className="text-muted-foreground">Type:</span> {selectedFir.incidentType}</div>
+                    <div><span className="text-muted-foreground">Date:</span> {new Date(selectedFir.dateTime).toLocaleDateString()}</div>
+                    <div className="col-span-2"><span className="text-muted-foreground">Location:</span> {selectedFir.location}</div>
                   </div>
-                )}
-                {/* Evidence Files */}
-                {selectedFir.evidenceFiles && selectedFir.evidenceFiles.length > 0 && (
-                  <div className="pt-2 border-t">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Paperclip className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-foreground">Evidence Files ({selectedFir.evidenceFiles.length})</span>
+                  <div className={isClosed ? 'line-through text-muted-foreground' : ''}>
+                    <span className="text-muted-foreground">Description:</span>
+                    <p className="mt-1">{selectedFir.description}</p>
+                  </div>
+                  {selectedFir.assignedOfficer && (
+                    <div className={isClosed ? 'line-through text-muted-foreground' : ''}><span className="text-muted-foreground">Assigned Officer:</span> {selectedFir.assignedOfficer}</div>
+                  )}
+                  {selectedFir.remarks && (
+                    <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                      <p className="font-medium text-destructive flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> Police Remarks</p>
+                      <p className="mt-1 text-muted-foreground">{selectedFir.remarks}</p>
                     </div>
-                    <div className="space-y-2">
-                      {selectedFir.evidenceFiles.map((filePath, idx) => {
-                        const fileName = getFileName(filePath);
-                        const fileType = getFileType(filePath);
-                        const fileUrl = getFileUrl(filePath);
-                        
-                        return (
-                          <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                            {fileType === "image" ? (
-                              <FileImage className="h-4 w-4 text-green-500 shrink-0" />
-                            ) : (
-                              <FileIcon className="h-4 w-4 text-blue-500 shrink-0" />
-                            )}
-                            <span className="flex-1 text-sm truncate">{fileName}</span>
-                            <div className="flex gap-1">
-                              {fileType === "image" && (
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded hover:bg-background">
-                                  <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                  {selectedFir.actionNotes && selectedFir.actionNotes.length > 0 && (
+                    <div>
+                      <p className="font-medium text-foreground mb-1">Action Notes:</p>
+                      <ul className="space-y-1">
+                        {selectedFir.actionNotes.map((note, i) => (
+                          <li key={i} className="flex items-start gap-2 text-muted-foreground">
+                            <CheckCircle className="mt-0.5 h-3 w-3 text-success shrink-0" /> {note}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {selectedFir.evidenceFiles && selectedFir.evidenceFiles.length > 0 && (
+                    <div className="pt-2 border-t">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Paperclip className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium text-foreground">Evidence Files ({selectedFir.evidenceFiles.length})</span>
+                      </div>
+                      <div className="space-y-2">
+                        {selectedFir.evidenceFiles.map((filePath, idx) => {
+                          const fileName = getFileName(filePath);
+                          const fileType = getFileType(filePath);
+                          const fileUrl = getFileUrl(filePath);
+                          return (
+                            <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                              {fileType === "image" ? <FileImage className="h-4 w-4 text-green-500 shrink-0" /> : <FileIcon className="h-4 w-4 text-blue-500 shrink-0" />}
+                              <span className="flex-1 text-sm truncate">{fileName}</span>
+                              <div className="flex gap-1">
+                                {fileType === "image" && (
+                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded hover:bg-background">
+                                    <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </a>
+                                )}
+                                <a href={fileUrl} download={fileName} className="p-1.5 rounded hover:bg-background">
+                                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
                                 </a>
-                              )}
-                              <a href={fileUrl} download={fileName} className="p-1.5 rounded hover:bg-background">
-                                <Download className="h-3.5 w-3.5 text-muted-foreground" />
-                              </a>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+                  )}
+                </div>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -347,18 +341,21 @@ export default function CitizenDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredFirs.map((fir) => (
-                    <tr key={fir.id} className="hover:bg-muted/50">
-                      <td className="py-3 font-medium text-foreground">{fir.firNumber}</td>
-                      <td className="py-3 text-muted-foreground">{fir.incidentType}</td>
-                      <td className="py-3 text-muted-foreground">{new Date(fir.dateTime).toLocaleDateString()}</td>
-                      <td className="py-3"><PriorityBadge priority={fir.priority} /></td>
-                      <td className="py-3"><StatusBadge status={fir.status} /></td>
-                      <td className="py-3">
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedFir(fir)}>View</Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredFirs.map((fir) => {
+                    const isClosed = fir.status === "CLOSED" || fir.status === "REJECTED";
+                    return (
+                      <tr key={fir.id} className={`hover:bg-muted/50 transition-colors ${isClosed ? 'opacity-60' : ''}`}>
+                        <td className={`py-3 font-medium ${isClosed ? 'text-slate-500 line-through' : 'text-foreground'}`}>{fir.firNumber}</td>
+                        <td className={`py-3 text-muted-foreground ${isClosed ? 'line-through' : ''}`}>{fir.incidentType}</td>
+                        <td className={`py-3 text-muted-foreground ${isClosed ? 'line-through' : ''}`}>{new Date(fir.dateTime).toLocaleDateString()}</td>
+                        <td className="py-3"><PriorityBadge priority={fir.priority} /></td>
+                        <td className="py-3"><StatusBadge status={fir.status} /></td>
+                        <td className="py-3">
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedFir(fir)}>View</Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
