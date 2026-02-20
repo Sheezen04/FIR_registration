@@ -85,13 +85,15 @@ public class FIRController {
         return ResponseEntity.ok(firService.getFIRsByStation(station));
     }
 
+    // ✅ UPDATED: Now accepts @AuthenticationPrincipal User user
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('POLICE') or hasRole('ADMIN')")
     public ResponseEntity<FIRResponse> updateFIRStatus(
             @PathVariable Long id,
-            @RequestBody UpdateFIRStatusRequest request
+            @RequestBody UpdateFIRStatusRequest request,
+            @AuthenticationPrincipal User user 
     ) {
-        return ResponseEntity.ok(firService.updateFIRStatus(id, request));
+        return ResponseEntity.ok(firService.updateFIRStatus(id, request, user));
     }
 
     @GetMapping("/stats")

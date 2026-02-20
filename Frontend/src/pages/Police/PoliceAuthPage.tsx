@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, BadgeCheck } from "lucide-react";
+import { Shield, BadgeCheck, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,11 @@ export default function PoliceAuthPage() {
   const [station, setStation] = useState("");
   const [policeCode, setPoliceCode] = useState("");
 
+  // Validation State
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const { login, registerPolice, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -34,6 +38,49 @@ export default function PoliceAuthPage() {
       navigate("/police/dashboard", { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
+
+  // 🔐 Strong Password Validation
+  const validatePassword = (password: string) => {
+    const minLength = /.{6,}/;
+    const hasUpperCase = /[A-Z]/;
+    const hasNumber = /[0-9]/;
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/;
+
+    return (
+      minLength.test(password) &&
+      hasUpperCase.test(password) &&
+      hasNumber.test(password) &&
+      hasSpecialChar.test(password)
+    );
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+
+    if (!validatePassword(value)) {
+      setPasswordError(
+        "Minimum 6 characters, 1 uppercase, number & 1 special character required."
+      );
+    } else {
+      setPasswordError("");
+    }
+
+    if (confirmPassword && value !== confirmPassword) {
+      setConfirmError("Passwords do not match.");
+    } else {
+      setConfirmError("");
+    }
+  };
+
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+
+    if (password !== value) {
+      setConfirmError("Passwords do not match.");
+    } else {
+      setConfirmError("");
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,10 +115,20 @@ export default function PoliceAuthPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!validatePassword(password)) {
+      toast({
+        title: "Invalid Password",
+        description:
+          "Password must be at least 6 characters and include 1 uppercase, number & 1 special character.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast({
-        title: "Error",
-        description: "Passwords do not match",
+        title: "Password Mismatch",
+        description: "Passwords do not match.",
         variant: "destructive",
       });
       return;
@@ -87,14 +144,17 @@ export default function PoliceAuthPage() {
     }
 
     setIsSubmitting(true);
+
     try {
       const success = await registerPolice(name, email, password, station);
+
       if (success) {
         toast({
           title: "Registration successful",
           description: "Welcome to FIR System, Officer!",
         });
-        navigate("/police/dashboard");
+        // ✅ Passing newUser: true to trigger the Police Dashboard Onboarding Guide
+        navigate("/police/dashboard", { state: { newUser: true } });
       } else {
         toast({
           title: "Registration failed",
@@ -146,7 +206,11 @@ export default function PoliceAuthPage() {
 
           <Tabs
             value={activeTab}
-            onValueChange={(v) => setActiveTab(v as "login" | "register")}
+            onValueChange={(v) => {
+              setActiveTab(v as "login" | "register");
+              setPasswordError("");
+              setConfirmError("");
+            }}
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2">
@@ -154,6 +218,7 @@ export default function PoliceAuthPage() {
               <TabsTrigger value="register">Register</TabsTrigger>
             </TabsList>
 
+            {/* ── LOGIN TAB ── */}
             <TabsContent value="login" className="space-y-4 mt-6">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
@@ -190,6 +255,7 @@ export default function PoliceAuthPage() {
               </form>
             </TabsContent>
 
+            {/* ── REGISTER TAB ── */}
             <TabsContent value="register" className="space-y-4 mt-6">
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
@@ -232,11 +298,17 @@ export default function PoliceAuthPage() {
                     id="password"
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
                     placeholder="Create a password"
                     required
                     disabled={isSubmitting}
                   />
+                  {passwordError && (
+                    <p className="text-[11px] text-destructive mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {passwordError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -244,19 +316,24 @@ export default function PoliceAuthPage() {
                     id="confirmPassword"
                     type="password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                     placeholder="Confirm your password"
                     required
                     disabled={isSubmitting}
                   />
+                  {confirmError && (
+                    <p className="text-[11px] text-destructive mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {confirmError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label
                     htmlFor="policeCode"
                     className="flex items-center gap-2"
                   >
-                    <BadgeCheck className="h-4 w-4" /> Police Authorization
-                    Code
+                    <BadgeCheck className="h-4 w-4" /> Police Authorization Code
                   </Label>
                   <Input
                     id="policeCode"
@@ -271,7 +348,7 @@ export default function PoliceAuthPage() {
                 <Button
                   type="submit"
                   className="w-full gradient-gold text-accent-foreground font-semibold hover:opacity-90"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!passwordError || !!confirmError}
                 >
                   {isSubmitting
                     ? "Creating Account..."

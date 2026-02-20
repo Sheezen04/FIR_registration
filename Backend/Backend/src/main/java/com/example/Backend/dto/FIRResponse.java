@@ -32,4 +32,7 @@ public class FIRResponse {
     private List<String> evidenceFiles;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // ✅ Added History Field for Audit Logs
+    private List<FIRHistoryDTO> history;
 }

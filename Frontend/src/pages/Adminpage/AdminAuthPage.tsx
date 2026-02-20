@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, Lock } from "lucide-react";
+import { Shield, Lock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,10 +22,57 @@ export default function AdminAuthPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
   
+  // Validation state
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, registerAdmin } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // 🔐 Strong Password Validation
+  const validatePassword = (password: string) => {
+    const minLength = /.{6,}/;
+    const hasUpperCase = /[A-Z]/;
+    const hasNumber = /[0-9]/;
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/;
+
+    return (
+      minLength.test(password) &&
+      hasUpperCase.test(password) &&
+      hasNumber.test(password) &&
+      hasSpecialChar.test(password)
+    );
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+
+    if (!validatePassword(value)) {
+      setPasswordError(
+        "Minimum 6 characters, 1 uppercase, number & 1 special character required."
+      );
+    } else {
+      setPasswordError("");
+    }
+
+    if (confirmPassword && value !== confirmPassword) {
+      setConfirmError("Passwords do not match.");
+    } else {
+      setConfirmError("");
+    }
+  };
+
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+
+    if (password !== value) {
+      setConfirmError("Passwords do not match.");
+    } else {
+      setConfirmError("");
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +96,16 @@ export default function AdminAuthPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!validatePassword(password)) {
+      toast({
+        title: "Invalid Password",
+        description:
+          "Password must be at least 6 characters and include 1 uppercase, number & 1 special character.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
       return;
@@ -96,7 +153,11 @@ export default function AdminAuthPage() {
             <p className="text-muted-foreground">Access for system administrators</p>
           </div>
 
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "register")} className="w-full">
+          <Tabs value={activeTab} onValueChange={(v) => {
+            setActiveTab(v as "login" | "register");
+            setPasswordError("");
+            setConfirmError("");
+          }} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Sign In</TabsTrigger>
               <TabsTrigger value="register">Register</TabsTrigger>
@@ -165,11 +226,17 @@ export default function AdminAuthPage() {
                     id="password" 
                     type="password" 
                     value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
+                    onChange={(e) => handlePasswordChange(e.target.value)} 
                     placeholder="Create a password" 
                     required 
                     disabled={isSubmitting} 
                   />
+                  {passwordError && (
+                    <p className="text-[11px] text-destructive mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {passwordError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -177,11 +244,17 @@ export default function AdminAuthPage() {
                     id="confirmPassword" 
                     type="password" 
                     value={confirmPassword} 
-                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                    onChange={(e) => handleConfirmPasswordChange(e.target.value)} 
                     placeholder="Confirm your password" 
                     required 
                     disabled={isSubmitting} 
                   />
+                  {confirmError && (
+                    <p className="text-[11px] text-destructive mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {confirmError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="adminCode" className="flex items-center gap-2">
@@ -197,7 +270,7 @@ export default function AdminAuthPage() {
                     disabled={isSubmitting} 
                   />
                 </div>
-                <Button type="submit" className="w-full gradient-gold text-accent-foreground font-semibold hover:opacity-90" disabled={isSubmitting}>
+                <Button type="submit" className="w-full gradient-gold text-accent-foreground font-semibold hover:opacity-90" disabled={isSubmitting || !!passwordError || !!confirmError}>
                   {isSubmitting ? "Creating Account..." : "Create Admin Account"}
                 </Button>
               </form>

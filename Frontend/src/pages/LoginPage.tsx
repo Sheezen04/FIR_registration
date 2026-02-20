@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, Eye, EyeOff } from "lucide-react";
+import { Shield, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,78 +10,42 @@ import { useToast } from "@/hooks/use-toast";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [captchaInput, setCaptchaInput] = useState("");
+  const [generatedCaptcha, setCaptcha] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
-  const [confirmError, setConfirmError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // 🔐 Strong Password Validation
-  const validatePassword = (password: string) => {
-    const minLength = /.{6,}/;
-    const hasUpperCase = /[A-Z]/;
-    const hasNumber = /[0-9]/;
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/;
-
-    return (
-      minLength.test(password) &&
-      hasUpperCase.test(password) &&
-      hasNumber.test(password) &&
-      hasSpecialChar.test(password)
-    );
+  // 🔄 Generate Random Captcha
+  const generateCaptcha = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let result = "";
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCaptcha(result);
   };
 
-  const handlePasswordChange = (value: string) => {
-    setPassword(value);
-
-    if (!validatePassword(value)) {
-      setPasswordError(
-        "Minimum 6 characters, 1 uppercase letter, 1 number & 1 special character required."
-      );
-    } else {
-      setPasswordError("");
-    }
-
-    if (confirmPassword && value !== confirmPassword) {
-      setConfirmError("Passwords do not match.");
-    } else {
-      setConfirmError("");
-    }
-  };
-
-  const handleConfirmPasswordChange = (value: string) => {
-    setConfirmPassword(value);
-
-    if (password !== value) {
-      setConfirmError("Passwords do not match.");
-    } else {
-      setConfirmError("");
-    }
-  };
+  // Generate on mount
+  useEffect(() => {
+    generateCaptcha();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validatePassword(password)) {
+    if (captchaInput !== generatedCaptcha) {
       toast({
-        title: "Invalid Password",
-        description:
-          "Password must be at least 6 characters and include 1 uppercase, 1 number & 1 special character.",
+        title: "Invalid Captcha",
+        description: "Please enter the correct captcha code.",
         variant: "destructive",
       });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast({
-        title: "Password Mismatch",
-        description: "Passwords do not match.",
-        variant: "destructive",
-      });
+      // Refresh captcha on failure for security
+      generateCaptcha();
+      setCaptchaInput("");
       return;
     }
 
@@ -99,6 +63,9 @@ export default function LoginPage() {
           description: "Invalid credentials",
           variant: "destructive",
         });
+        // Refresh captcha on failed login attempt
+        generateCaptcha();
+        setCaptchaInput("");
       }
     } catch (error) {
       toast({
@@ -110,13 +77,6 @@ export default function LoginPage() {
       setIsSubmitting(false);
     }
   };
-
-  const isFormInvalid =
-    !email ||
-    !password ||
-    !confirmPassword ||
-    passwordError ||
-    confirmError;
 
   return (
     <div className="flex min-h-screen">
@@ -174,52 +134,64 @@ export default function LoginPage() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => handlePasswordChange(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
                   disabled={isSubmitting}
                 />
-                <button
+                {/* <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-muted-foreground"
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+                </button> */}
               </div>
-              {passwordError && (
-                <p className="text-sm text-red-500 mt-1">
-                  {passwordError}
-                </p>
-              )}
             </div>
 
-            {/* Confirm Password */}
+            {/* Captcha Section */}
             <div>
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Label htmlFor="captcha">Captcha</Label>
+              <div className="flex gap-2 items-center mb-2">
+                <div 
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 p-2.5 rounded-md text-center font-mono text-lg font-bold tracking-widest border border-slate-200 select-none"
+                  style={{
+                    letterSpacing: '0.25em',
+                    backgroundImage: 'linear-gradient(45deg, #f3f4f6 25%, transparent 25%, transparent 75%, #f3f4f6 75%, #f3f4f6), linear-gradient(45deg, #f3f4f6 25%, transparent 25%, transparent 75%, #f3f4f6 75%, #f3f4f6)',
+                    backgroundSize: '10px 10px',
+                    backgroundPosition: '0 0, 5px 5px'
+                  }}
+                >
+                  {generatedCaptcha}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={generateCaptcha}
+                  title="Refresh Captcha"
+                  className="shrink-0"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
               <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) =>
-                  handleConfirmPasswordChange(e.target.value)
-                }
-                placeholder="Confirm your password"
+                id="captcha"
+                type="text"
+                value={captchaInput}
+                onChange={(e) => setCaptchaInput(e.target.value)}
+                placeholder="Enter the code above"
                 required
                 disabled={isSubmitting}
+                autoComplete="off"
               />
-              {confirmError && (
-                <p className="text-sm text-red-500 mt-1">
-                  {confirmError}
-                </p>
-              )}
             </div>
 
             {/* Submit */}
             <Button
               type="submit"
               className="w-full gradient-gold text-accent-foreground font-semibold hover:opacity-90"
-              disabled={isSubmitting || !!isFormInvalid}
+              disabled={isSubmitting}
             >
               {isSubmitting ? "Signing In..." : "Sign In"}
             </Button>

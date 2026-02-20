@@ -9,7 +9,8 @@ import {
   FileText, Shield, CheckCircle, XCircle, Clock, MessageSquare, Users, Calendar,
   ChevronDown, ChevronRight, ChevronLeft, Search, Filter, Scale, Paperclip, FileImage, FileIcon,
   ZoomIn, ZoomOut, RotateCw, Maximize2, Download, Eye, File, RefreshCcw, LayoutGrid,
-  List, Pin, PinOff, Loader2, AlertTriangle, HelpCircle, CheckCircle2, MousePointer2, X
+  List, Pin, PinOff, Loader2, AlertTriangle, HelpCircle, CheckCircle2, MousePointer2, X,
+  History, Edit3, ArrowDownCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,13 +20,39 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const navItems = [
   { label: "Dashboard", href: "/police/dashboard", icon: <Shield className="h-4 w-4" /> },
   { label: "Calendar of F.I.Rs", href: "/police/calendar", icon: <Calendar className="h-4 w-4" /> },
   { label: "Rules & Laws", href: "/police/rules", icon: <Scale className="h-4 w-4" /> },
 ];
+
+// ── TYPES ──
+interface AuditLog {
+  id: number;
+  action: "STATUS_CHANGE" | "PINNED" | "UNPINNED" | "COMMENT";
+  description: string;
+  officerName: string;
+  timestamp: string;
+}
+
+interface ExtendedFIRResponse extends FIRResponse {
+  history?: AuditLog[];
+}
+
+// ── Column State Interface ──
+interface ColumnState {
+  items: ExtendedFIRResponse[];
+  page: number;
+  hasMore: boolean;
+  loading: boolean;
+  total: number;
+}
+
+const COLUMN_KEYS = ["PENDING", "UNDER_INVESTIGATION", "IN_PROGRESS", "APPROVED", "CLOSED"];
 
 // ── File Helper Functions ──
 const getFileExtension = (filePath: string): string => {
@@ -187,31 +214,44 @@ const getDateKey = (dateString: string): string => {
 };
 const getFirDate = (fir: FIRResponse): string => fir.createdAt || fir.dateTime;
 
-// ── ONBOARDING TOUR COMPONENTS (NEW) ──
+// ── ONBOARDING COMPONENTS ──
 
 // 1. Simulates Drag and Drop Animation
 const DragDropSimulation = () => {
   return (
     <div className="relative w-full h-48 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden flex items-center justify-center gap-8 p-4">
+      {/* Column 1 */}
       <div className="w-1/3 h-full bg-slate-200/50 rounded border border-dashed border-slate-300 p-2 flex flex-col gap-2">
         <div className="text-[10px] font-bold text-slate-400 uppercase">Pending</div>
         <div className="h-2 w-full bg-white rounded opacity-50"></div>
       </div>
+
+      {/* Column 2 */}
       <div className="w-1/3 h-full bg-indigo-50/50 rounded border border-dashed border-indigo-200 p-2 flex flex-col gap-2">
         <div className="text-[10px] font-bold text-indigo-400 uppercase">In Progress</div>
       </div>
+
+      {/* The Moving Card */}
       <motion.div
         className="absolute z-10 w-24 h-16 bg-white rounded shadow-lg border-l-4 border-amber-400 p-2 flex flex-col justify-center"
         initial={{ x: -60, y: 10, rotate: 0 }}
         animate={{
-          x: [-60, -60, 60, 60, -60], y: [10, -5, -5, 10, 10], scale: [1, 1.05, 1.05, 1, 1],
+          x: [-60, -60, 60, 60, -60], // Move right then reset
+          y: [10, -5, -5, 10, 10],   // Lift up then drop
+          scale: [1, 1.05, 1.05, 1, 1],
           boxShadow: ["0px 2px 5px rgba(0,0,0,0.1)", "0px 10px 20px rgba(0,0,0,0.15)", "0px 10px 20px rgba(0,0,0,0.15)", "0px 2px 5px rgba(0,0,0,0.1)", "0px 2px 5px rgba(0,0,0,0.1)"]
         }}
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       >
         <div className="h-2 w-16 bg-slate-200 rounded mb-1"></div>
         <div className="h-1.5 w-10 bg-slate-100 rounded"></div>
-        <motion.div className="absolute -bottom-4 -right-4 text-slate-800" animate={{ scale: [1, 0.9, 0.9, 1, 1] }} transition={{ duration: 3, repeat: Infinity }}>
+
+        {/* The Cursor */}
+        <motion.div
+          className="absolute -bottom-4 -right-4 text-slate-800"
+          animate={{ scale: [1, 0.9, 0.9, 1, 1] }}
+          transition={{ duration: 3, repeat: Infinity }}
+        >
           <MousePointer2 className="fill-slate-800 text-white h-6 w-6" />
         </motion.div>
       </motion.div>
@@ -223,23 +263,36 @@ const DragDropSimulation = () => {
 const FilterSimulation = () => {
   return (
     <div className="w-full h-48 bg-slate-900 rounded-lg flex items-center justify-center p-6 relative overflow-hidden">
-      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5 }} className="w-full max-w-sm bg-white rounded-md p-2 flex items-center gap-2 shadow-xl">
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-sm bg-white rounded-md p-2 flex items-center gap-2 shadow-xl"
+      >
         <Search className="h-4 w-4 text-slate-400" />
         <div className="h-2 w-24 bg-slate-200 rounded animate-pulse"></div>
         <div className="ml-auto bg-indigo-600 h-6 w-12 rounded text-[10px] text-white flex items-center justify-center">Find</div>
       </motion.div>
       <div className="absolute top-4 left-4 flex gap-2">
         {["All", "Pending", "Closed"].map((t, i) => (
-          <motion.div key={t} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.2 }} className="px-2 py-1 bg-slate-800 text-slate-300 text-[10px] rounded-full border border-slate-700">{t}</motion.div>
+          <motion.div
+            key={t}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.2 }}
+            className="px-2 py-1 bg-slate-800 text-slate-300 text-[10px] rounded-full border border-slate-700"
+          >
+            {t}
+          </motion.div>
         ))}
       </div>
     </div>
   );
 };
 
-// Main Onboarding Component
 const PoliceOnboardingTour = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const [currentStep, setCurrentStep] = useState(0);
+
   const steps = [
     {
       title: "Welcome to the Dashboard",
@@ -263,7 +316,12 @@ const PoliceOnboardingTour = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
             <div className="h-2 bg-slate-200 w-full mb-2"></div>
             <div className="h-2 bg-slate-200 w-2/3"></div>
           </div>
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5, duration: 0.3 }} className="absolute top-1/2 left-1/2 ml-4 bg-slate-800 text-white p-2 rounded shadow-xl text-xs w-32">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5, duration: 0.3 }}
+            className="absolute top-1/2 left-1/2 ml-4 bg-slate-800 text-white p-2 rounded shadow-xl text-xs w-32"
+          >
             <div className="p-1 hover:bg-slate-700 rounded cursor-pointer">📌 Pin to Top</div>
             <div className="p-1 hover:bg-slate-700 rounded cursor-pointer">👁️ Review FIR</div>
           </motion.div>
@@ -278,41 +336,118 @@ const PoliceOnboardingTour = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     }
   ];
 
-  const handleNext = () => { if (currentStep < steps.length - 1) setCurrentStep(c => c + 1); else onClose(); };
-  const handlePrev = () => { if (currentStep > 0) setCurrentStep(c => c - 1); };
+  const handleNext = () => {
+    if (currentStep < steps.length - 1) setCurrentStep(c => c + 1);
+    else onClose();
+  };
+
+  const handlePrev = () => {
+    if (currentStep > 0) setCurrentStep(c => c - 1);
+  };
 
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row max-h-[90vh]">
-          {/* Sidebar */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row max-h-[90vh]"
+        >
+
+          {/* Sidebar Navigation */}
           <div className="w-full md:w-64 bg-slate-50 border-r border-slate-200 p-6 flex flex-col">
-            <div className="mb-6"><h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-indigo-600" />Quick Guide</h2><p className="text-xs text-slate-500 mt-1">4 steps to mastery</p></div>
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-indigo-600" />
+                Quick Guide
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">4 steps to mastery</p>
+            </div>
+
             <div className="flex-1 space-y-2 overflow-y-auto">
               {steps.map((step, idx) => (
-                <button key={idx} onClick={() => setCurrentStep(idx)} className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all text-sm ${currentStep === idx ? "bg-white shadow-sm ring-1 ring-indigo-200 text-indigo-700 font-medium" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"}`}>
-                  <div className={`shrink-0 ${currentStep === idx ? "text-indigo-600" : "text-slate-400"}`}>{step.icon}</div>
+                <button
+                  key={idx}
+                  onClick={() => setCurrentStep(idx)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all text-sm ${currentStep === idx
+                      ? "bg-white shadow-sm ring-1 ring-indigo-200 text-indigo-700 font-medium"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    }`}
+                >
+                  <div className={`shrink-0 ${currentStep === idx ? "text-indigo-600" : "text-slate-400"}`}>
+                    {step.icon}
+                  </div>
                   <span>{idx + 1}. {step.title.split(" ")[0]}...</span>
                   {currentStep > idx && <CheckCircle2 className="h-3.5 w-3.5 ml-auto text-green-500" />}
                 </button>
               ))}
             </div>
-            <div className="mt-6 pt-6 border-t border-slate-200"><div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-2">Rules & Laws</div><div className="bg-indigo-50 rounded p-3 text-xs text-indigo-800 leading-relaxed border border-indigo-100">Always verify evidence before changing status to <strong>Approved</strong>.</div></div>
+
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-2">Rules & Laws</div>
+              <div className="bg-indigo-50 rounded p-3 text-xs text-indigo-800 leading-relaxed border border-indigo-100">
+                Always verify evidence before changing status to <strong>Approved</strong>.
+              </div>
+            </div>
           </div>
-          {/* Content */}
+
+          {/* Main Content Area */}
           <div className="flex-1 flex flex-col p-6 md:p-8">
             <div className="flex justify-between items-start mb-6">
-              <div><h1 className="text-2xl font-bold text-slate-900 mb-2">{steps[currentStep].title}</h1><p className="text-slate-600 text-sm leading-relaxed max-w-lg">{steps[currentStep].desc}</p></div>
-              <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100"><X className="h-5 w-5 text-slate-400" /></Button>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">{steps[currentStep].title}</h1>
+                <p className="text-slate-600 text-sm leading-relaxed max-w-lg">{steps[currentStep].desc}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100">
+                <X className="h-5 w-5 text-slate-400" />
+              </Button>
             </div>
-            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-4 mb-6 relative overflow-hidden group">{steps[currentStep].visual}<div className="absolute bottom-3 right-3 flex gap-1"><div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div><div className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse"></div><div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div></div></div>
+
+            {/* Visual Box (Video Placeholder) */}
+            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-4 mb-6 relative overflow-hidden group">
+              {steps[currentStep].visual}
+
+              <div className="absolute bottom-3 right-3 flex gap-1">
+                <div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div>
+                <div className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse"></div>
+                <div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div>
+              </div>
+            </div>
+
+            {/* Footer Navigation */}
             <div className="flex items-center justify-between pt-2">
-              <div className="flex gap-1">{steps.map((_, i) => (<div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${currentStep === i ? "w-6 bg-indigo-600" : "w-1.5 bg-slate-200"}`} />))}</div>
-              <div className="flex gap-2"><Button variant="outline" onClick={handlePrev} disabled={currentStep === 0} className="gap-2"><ChevronLeft className="h-4 w-4" /> Back</Button><Button onClick={handleNext} className="bg-indigo-600 hover:bg-indigo-700 gap-2 min-w-[100px]">{currentStep === steps.length - 1 ? "Finish" : "Next"}{currentStep !== steps.length - 1 && <ChevronRight className="h-4 w-4" />}</Button></div>
+              <div className="flex gap-1">
+                {steps.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${currentStep === i ? "w-6 bg-indigo-600" : "w-1.5 bg-slate-200"}`}
+                  />
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handlePrev}
+                  disabled={currentStep === 0}
+                  className="gap-2"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Back
+                </Button>
+                <Button
+                  onClick={handleNext}
+                  className="bg-indigo-600 hover:bg-indigo-700 gap-2 min-w-[100px]"
+                >
+                  {currentStep === steps.length - 1 ? "Finish" : "Next"}
+                  {currentStep !== steps.length - 1 && <ChevronRight className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
+
         </motion.div>
       </div>
     </AnimatePresence>
@@ -325,7 +460,7 @@ interface GroupedFIRs {
   dateKey: string;
   dateLabel: string;
   relativeLabel: string;
-  firs: FIRResponse[];
+  firs: ExtendedFIRResponse[];
   isPinnedSection?: boolean;
 }
 type ViewMode = "list" | "grid";
@@ -427,8 +562,24 @@ const FIRCard = ({ fir, isPinned, onClick, onContextMenu, onDragStart, onDragEnd
 export default function PoliceDashboard() {
   const { toast } = useToast();
   const location = useLocation();
-  const [firs, setFirs] = useState<FIRResponse[]>([]);
-  const [selectedFir, setSelectedFir] = useState<FIRResponse | null>(null);
+
+  // ── COLUMNS STATE (For Grid View) ──
+  const [columnsData, setColumnsData] = useState<Record<string, ColumnState>>({
+    PENDING: { items: [], page: 0, hasMore: true, loading: false, total: 0 },
+    UNDER_INVESTIGATION: { items: [], page: 0, hasMore: true, loading: false, total: 0 },
+    IN_PROGRESS: { items: [], page: 0, hasMore: true, loading: false, total: 0 },
+    APPROVED: { items: [], page: 0, hasMore: true, loading: false, total: 0 },
+    CLOSED: { items: [], page: 0, hasMore: true, loading: false, total: 0 } // includes REJECTED
+  });
+
+  // ── LIST VIEW STATE (Restored) ──
+  const [firs, setFirs] = useState<ExtendedFIRResponse[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalElements, setTotalElements] = useState(0);
+  const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
+
+  const [selectedFir, setSelectedFir] = useState<ExtendedFIRResponse | null>(null);
   const [newStatus, setNewStatus] = useState<string>("");
   const [remarks, setRemarks] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -436,19 +587,10 @@ export default function PoliceDashboard() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
 
-  // ── PAGINATION STATE ──
-  const [currentPage, setCurrentPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [totalElements, setTotalElements] = useState(0);
-  const PAGE_SIZE = 5;
+  const PAGE_SIZE = 20;
 
-  // ── STATS COUNT STATE (Accurate DB Counts) ──
-  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({
-    PENDING: 0, UNDER_INVESTIGATION: 0, IN_PROGRESS: 0, APPROVED: 0, CLOSED: 0, REJECTED: 0,
-  });
-
-  // ── DATE GROUP COUNTS (Accurate DB Counts for List View) ──
-  const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
+  // ── GLOBAL STATS (For cards at top) ──
+  const [globalStats, setGlobalStats] = useState({ total: 0, pending: 0, active: 0, closed: 0 });
 
   // ── VIEW STATE ──
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -481,29 +623,22 @@ export default function PoliceDashboard() {
   const debouncedComplainant = useDebouncedValue(complainantFilter, 400);
 
   // ── HELPER: GET UNIQUE STORAGE KEY FOR USER ──
-  // This ensures the guide is shown once per unique email login
   const getUserStorageKey = () => {
     try {
       const userStr = localStorage.getItem("user");
       if (userStr) {
         const user = JSON.parse(userStr);
-        // Returns a key like: police_tour_seen_john@example.com
         return `police_tour_seen_${user.email || user.id || 'guest'}`;
       }
-    } catch (e) {
-      console.error("Error reading user from storage", e);
-    }
+    } catch (e) { console.error(e); }
     return "police_tour_seen_guest";
   };
 
   // ── ONBOARDING EFFECT ──
   useEffect(() => {
-    // Only verify and auto-open if we came specifically from registration (via location state)
     if (location.state?.newUser) {
       const storageKey = getUserStorageKey();
       const hasSeen = localStorage.getItem(storageKey);
-      
-      // If they haven't seen it yet, show it
       if (!hasSeen) {
         const timer = setTimeout(() => setIsTourOpen(true), 1000);
         return () => clearTimeout(timer);
@@ -517,18 +652,25 @@ export default function PoliceDashboard() {
     localStorage.setItem(storageKey, "true");
   };
 
-  const handleOpenTour = () => {
-    setIsTourOpen(true);
-  };
+  const handleOpenTour = () => setIsTourOpen(true);
 
   useEffect(() => {
     localStorage.setItem("pinnedFirIds", JSON.stringify(Array.from(pinnedIds)));
   }, [pinnedIds]);
 
+  // ── HELPER: Get Current Officer Name (Simulated) ──
+  const getCurrentOfficerName = () => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) return JSON.parse(userStr).name || "Current Officer";
+    } catch (e) { }
+    return "Current Officer";
+  }
+
   // ── 1. Fetch Global Status Counts ──
   const fetchStatusCounts = useCallback(async () => {
     const baseParams: Partial<FIRFilterParams> = {
-      page: 0, size: 1, // Minimize payload
+      page: 0, size: 1,
       search: debouncedSearch || undefined,
       complainant: debouncedComplainant || undefined,
       priority: priorityFilter !== "ALL" ? priorityFilter : undefined,
@@ -543,15 +685,23 @@ export default function PoliceDashboard() {
       const newCounts: Record<string, number> = {};
       results.forEach((res, index) => { newCounts[statuses[index]] = res.data.totalElements; });
       setStatusCounts(newCounts);
+
+      // Update global stats
+      setGlobalStats({
+        total: Object.values(newCounts).reduce((a, b) => a + b, 0),
+        pending: newCounts["PENDING"] || 0,
+        active: (newCounts["APPROVED"] || 0) + (newCounts["UNDER_INVESTIGATION"] || 0) + (newCounts["IN_PROGRESS"] || 0),
+        closed: (newCounts["CLOSED"] || 0) + (newCounts["REJECTED"] || 0)
+      });
+
     } catch (error) { console.error("Failed to fetch status counts", error); }
   }, [debouncedSearch, debouncedComplainant, priorityFilter, typeFilter, dateFilter]);
 
-  // ── 2. Load FIRs (Main List) ──
-  const loadFIRs = useCallback(async (page: number = 0, append: boolean = false) => {
+  // ── 2. Load Data for LIST View ──
+  const loadListViewData = useCallback(async (page: number = 0, append: boolean = false) => {
     try {
       if (page === 0) {
         setIsLoading(true);
-        // Reset specific date counts when applying new filters
         setDateCounts({});
       } else {
         setIsLoadingMore(true);
@@ -570,43 +720,99 @@ export default function PoliceDashboard() {
       const response = await firApi.getPaginated(params);
       const { content, hasNext, totalElements: total } = response.data;
 
-      if (append) setFirs(prev => [...prev, ...content]);
-      else setFirs(content);
+      const contentWithHistory = content.map((f: any) => ({
+        ...f,
+        history: f.history || []
+      }));
+
+      if (append) setFirs(prev => [...prev, ...contentWithHistory]);
+      else setFirs(contentWithHistory);
 
       setHasMore(hasNext);
       setTotalElements(total);
       setCurrentPage(page);
     } catch (error) {
-      console.error("❌ Failed to load FIRs:", error);
+      console.error("❌ Failed to load List View FIRs:", error);
       toast({ title: "Error", description: "Failed to load FIRs", variant: "destructive" });
     } finally {
       setIsLoading(false); setIsLoadingMore(false);
     }
   }, [debouncedSearch, debouncedComplainant, statusFilter, priorityFilter, typeFilter, dateFilter, toast]);
 
-  // ── Initial load and refresh global counts ──
-  useEffect(() => {
-    loadFIRs(0, false);
-    fetchStatusCounts();
-  }, [loadFIRs, fetchStatusCounts]);
+  // ── 3. Load Data for GRID View (Columns) ──
+  const loadColumnData = useCallback(async (statusKey: string, page = 0) => {
+    setColumnsData(prev => ({
+      ...prev,
+      [statusKey]: { ...prev[statusKey], loading: true }
+    }));
 
-  // ── 3. Fetch Accurate Counts for Date Groups (List View) ──
-  // This effect monitors groupedFIRs and fetches total counts for dates that haven't been fetched yet
+    try {
+      let apiStatus = statusKey;
+      const params: FIRFilterParams = {
+        page,
+        size: 20,
+        search: debouncedSearch || undefined,
+        complainant: debouncedComplainant || undefined,
+        status: apiStatus === "CLOSED" ? undefined : apiStatus,
+        priority: priorityFilter !== "ALL" ? priorityFilter : undefined,
+        incidentType: typeFilter !== "ALL" ? typeFilter : undefined,
+        dateFilter: dateFilter || undefined,
+      };
+
+      if (statusKey === "CLOSED") {
+        params.status = "CLOSED";
+      }
+
+      const response = await firApi.getPaginated(params);
+      const { content, hasNext, totalElements } = response.data;
+
+      const contentWithHistory = content.map((f: any) => ({
+        ...f,
+        history: f.history || []
+      }));
+
+      setColumnsData(prev => ({
+        ...prev,
+        [statusKey]: {
+          items: page === 0 ? contentWithHistory : [...prev[statusKey].items, ...contentWithHistory],
+          page,
+          hasMore: hasNext,
+          loading: false,
+          total: totalElements
+        }
+      }));
+
+    } catch (error) {
+      console.error(`Failed to load ${statusKey}`, error);
+      setColumnsData(prev => ({ ...prev, [statusKey]: { ...prev[statusKey], loading: false } }));
+    }
+  }, [debouncedSearch, debouncedComplainant, priorityFilter, typeFilter, dateFilter]);
+
+
+  // ── INITIAL LOAD & FILTER CHANGES ──
+  useEffect(() => {
+    // 1. Fetch Global Stats
+    fetchStatusCounts();
+
+    // 2. Fetch Data based on View Mode
+    if (viewMode === "list") {
+      loadListViewData(0, false);
+    } else {
+      // Grid View: Load all columns
+      COLUMN_KEYS.forEach(key => loadColumnData(key, 0));
+    }
+  }, [viewMode, fetchStatusCounts, loadListViewData, loadColumnData]);
+
+
+  // ── 4. Fetch Accurate Counts for Date Groups (List View) ──
   useEffect(() => {
     if (viewMode !== "list") return;
-
-    // Create a list of dates to fetch
     const datesToFetch = new Set<string>();
-    
-    // We recreate groupedFIRs logic here briefly or access dependencies
-    // Since we can't easily access the memoized groupedFIRs inside this effect without circular deps,
-    // we iterate the firs array to find unique dates.
     firs.forEach(fir => {
-       const dateKey = getDateKey(getFirDate(fir));
-       // If we haven't fetched this date's total count yet, mark it
-       if (dateCounts[dateKey] === undefined) {
-         datesToFetch.add(dateKey);
-       }
+      const dateKey = getDateKey(getFirDate(fir));
+      if (dateCounts[dateKey] === undefined) {
+        datesToFetch.add(dateKey);
+      }
     });
 
     if (datesToFetch.size === 0) return;
@@ -614,15 +820,14 @@ export default function PoliceDashboard() {
     const fetchDateGroupCounts = async () => {
       const promises = Array.from(datesToFetch).map(async (dateKey) => {
         try {
-          // Fetch count specifically for this date with current filters
           const response = await firApi.getPaginated({
-             page: 0, size: 1, 
-             dateFilter: dateKey, // Filter by this specific date
-             search: debouncedSearch || undefined,
-             complainant: debouncedComplainant || undefined,
-             status: statusFilter !== "ALL" ? statusFilter : undefined,
-             priority: priorityFilter !== "ALL" ? priorityFilter : undefined,
-             incidentType: typeFilter !== "ALL" ? typeFilter : undefined,
+            page: 0, size: 1,
+            dateFilter: dateKey,
+            search: debouncedSearch || undefined,
+            complainant: debouncedComplainant || undefined,
+            status: statusFilter !== "ALL" ? statusFilter : undefined,
+            priority: priorityFilter !== "ALL" ? priorityFilter : undefined,
+            incidentType: typeFilter !== "ALL" ? typeFilter : undefined,
           });
           return { dateKey, count: response.data.totalElements };
         } catch (e) {
@@ -642,12 +847,13 @@ export default function PoliceDashboard() {
 
   }, [firs, viewMode, dateCounts, debouncedSearch, debouncedComplainant, statusFilter, priorityFilter, typeFilter]);
 
-  const loadMore = useCallback(() => {
-    if (!isLoadingMore && hasMore) loadFIRs(currentPage + 1, true);
-  }, [currentPage, hasMore, isLoadingMore, loadFIRs]);
+  const loadMoreList = useCallback(() => {
+    if (!isLoadingMore && hasMore) loadListViewData(currentPage + 1, true);
+  }, [currentPage, hasMore, isLoadingMore, loadListViewData]);
 
-  const sentinelRef = useInfiniteScroll(loadMore, hasMore, isLoading || isLoadingMore);
+  const sentinelRef = useInfiniteScroll(loadMoreList, hasMore, isLoading || isLoadingMore);
 
+  // ── Update Logic ──
   const handleUpdateStatus = async () => {
     if (!selectedFir || !newStatus) return;
     setIsUpdating(true);
@@ -657,12 +863,45 @@ export default function PoliceDashboard() {
         remarks: newStatus === "REJECTED" ? remarks : undefined,
         actionNote: newStatus !== "REJECTED" && remarks ? remarks : undefined,
       };
+
       const response = await firApi.updateStatus(selectedFir.id, request);
-      setFirs((prev) => prev.map((f) => (f.id === selectedFir.id ? response.data : f)));
+
+      const newLog: AuditLog = {
+        id: Date.now(),
+        action: "STATUS_CHANGE",
+        description: `Status changed from ${selectedFir.status} to ${newStatus}`,
+        officerName: getCurrentOfficerName(),
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedFir = { ...response.data, history: selectedFir.history ? [newLog, ...selectedFir.history] : [newLog] };
+
+      // Update Local State for BOTH Views
+
+      // 1. Update List View State
+      setFirs((prev) => prev.map((f) => f.id === selectedFir.id ? updatedFir : f));
+
+      // 2. Update Grid View State (Remove from old col, reload target cols)
+      if (viewMode === "grid") {
+        const oldStatus = selectedFir.status;
+        const targetStatus = newStatus;
+        loadColumnData(oldStatus, 0); // Refresh source
+        loadColumnData(targetStatus === "REJECTED" ? "CLOSED" : targetStatus, 0); // Refresh dest
+      } else {
+        // If in list view, force refresh grid data next time we switch
+        setColumnsData(prev => {
+          const newState = { ...prev };
+          // Invalidate grid data so it reloads fresh on switch
+          COLUMN_KEYS.forEach(key => { newState[key].items = []; newState[key].page = 0; });
+          return newState;
+        });
+      }
+
+      setSelectedFir(updatedFir);
       toast({ title: "FIR Updated", description: `${selectedFir.firNumber} status changed to ${newStatus}` });
-      setSelectedFir(null); setNewStatus(""); setRemarks("");
-      fetchStatusCounts(); // Update global counts
-      setDateCounts({}); // Reset date counts so they refresh
+      setNewStatus(""); setRemarks("");
+      fetchStatusCounts();
+      setDateCounts({});
     } catch (error) {
       console.error("❌ Failed to update status:", error);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
@@ -672,17 +911,43 @@ export default function PoliceDashboard() {
   const togglePin = useCallback((firId: number) => {
     setPinnedIds((prev) => {
       const newSet = new Set(prev);
-      const fir = firs.find((f) => f.id === firId);
+      const isPinned = !newSet.has(firId);
+
+      // Update List View
+      setFirs(prevFirs => prevFirs.map(f => {
+        if (f.id === firId) {
+          // Update mock history
+          const newLog: AuditLog = { id: Date.now(), action: isPinned ? "PINNED" : "UNPINNED", description: isPinned ? "Pinned FIR" : "Unpinned FIR", officerName: getCurrentOfficerName(), timestamp: new Date().toISOString() };
+          return { ...f, history: f.history ? [newLog, ...f.history] : [newLog] };
+        }
+        return f;
+      }));
+
+      // Update Grid View State
+      setColumnsData(prev => {
+        const newState = { ...prev };
+        Object.keys(newState).forEach(key => {
+          newState[key].items = newState[key].items.map(item => {
+            if (item.id === firId) {
+              const newLog: AuditLog = { id: Date.now(), action: isPinned ? "PINNED" : "UNPINNED", description: isPinned ? "Pinned FIR" : "Unpinned FIR", officerName: getCurrentOfficerName(), timestamp: new Date().toISOString() };
+              return { ...item, history: item.history ? [newLog, ...item.history] : [newLog] };
+            }
+            return item;
+          });
+        });
+        return newState;
+      });
+
       if (newSet.has(firId)) {
         newSet.delete(firId);
-        toast({ title: "Unpinned", description: `${fir?.firNumber || "FIR"} removed from pinned` });
+        toast({ title: "Unpinned", description: `FIR removed from pinned` });
       } else {
         newSet.add(firId);
-        toast({ title: "Pinned", description: `${fir?.firNumber || "FIR"} pinned to top` });
+        toast({ title: "Pinned", description: `FIR pinned to top` });
       }
       return newSet;
     });
-  }, [firs, toast]);
+  }, [toast]);
 
   const handleCardContextMenu = useCallback((e: React.MouseEvent, fir: FIRResponse) => {
     e.preventDefault(); e.stopPropagation();
@@ -718,10 +983,19 @@ export default function PoliceDashboard() {
       setIsUpdating(true);
       const request: UpdateFIRStatusRequest = { status: mappedStatus as FIRResponse["status"] };
       const response = await firApi.updateStatus(draggingFir.id, request);
-      setFirs((prev) => prev.map((f) => (f.id === draggingFir.id ? response.data : f)));
+
       toast({ title: "FIR Updated", description: `${draggingFir.firNumber} moved to ${mappedStatus}` });
+
+      // Refresh Columns
+      loadColumnData(currentStatus, 0);
+      loadColumnData(targetStatus, 0);
+
+      // Also Refresh List View data if we switch back
+      loadListViewData(0, false);
+
       fetchStatusCounts();
-      setDateCounts({}); // Refresh date counts
+      setDateCounts({});
+
     } catch (error) {
       console.error("❌ Failed to update status:", error);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
@@ -733,10 +1007,13 @@ export default function PoliceDashboard() {
   };
 
   const uniqueTypes = useMemo(() => {
-    const types = new Set(firs.map((f) => f.incidentType));
+    // Collect types from either list or grid depending on what's populated
+    const allItems = viewMode === 'list' ? firs : Object.values(columnsData).flatMap(c => c.items);
+    const types = new Set(allItems.map((f) => f.incidentType));
     return Array.from(types).sort();
-  }, [firs]);
+  }, [firs, columnsData, viewMode]);
 
+  // Sort Logic for List View
   const filteredFIRs = useMemo(() => {
     return [...firs].sort((a, b) => {
       const aPinned = pinnedIds.has(a.id) ? 1 : 0;
@@ -765,65 +1042,13 @@ export default function PoliceDashboard() {
     return dateGroups;
   }, [filteredFIRs, pinnedIds]);
 
-  // ── Kanban Columns with Total Counts ──
-  const kanbanColumns = useMemo(() => {
-    const columns = {
-      PENDING: { 
-        title: "Pending Review", 
-        color: "bg-amber-100 text-amber-700", 
-        items: [] as FIRResponse[],
-        totalCount: statusCounts["PENDING"] || 0 // Use DB count
-      },
-      UNDER_INVESTIGATION: { 
-        title: "Under Investigation", 
-        color: "bg-blue-100 text-blue-700", 
-        items: [] as FIRResponse[],
-        totalCount: statusCounts["UNDER_INVESTIGATION"] || 0 
-      },
-      IN_PROGRESS: { 
-        title: "In Progress", 
-        color: "bg-purple-100 text-purple-700", 
-        items: [] as FIRResponse[],
-        totalCount: statusCounts["IN_PROGRESS"] || 0 
-      },
-      APPROVED: { 
-        title: "Approved", 
-        color: "bg-green-100 text-green-700", 
-        items: [] as FIRResponse[],
-        totalCount: statusCounts["APPROVED"] || 0 
-      },
-      CLOSED: { 
-        title: "Closed / Rejected", 
-        color: "bg-slate-100 text-slate-700", 
-        items: [] as FIRResponse[],
-        totalCount: (statusCounts["CLOSED"] || 0) + (statusCounts["REJECTED"] || 0)
-      },
-    };
-
-    filteredFIRs.forEach((fir) => {
-      if (fir.status === "PENDING") columns.PENDING.items.push(fir);
-      else if (fir.status === "UNDER_INVESTIGATION") columns.UNDER_INVESTIGATION.items.push(fir);
-      else if (fir.status === "IN_PROGRESS") columns.IN_PROGRESS.items.push(fir);
-      else if (fir.status === "APPROVED") columns.APPROVED.items.push(fir);
-      else columns.CLOSED.items.push(fir);
-    });
-
-    Object.values(columns).forEach((col) => {
-      col.items.sort((a, b) => {
-        const aPinned = pinnedIds.has(a.id) ? 1 : 0;
-        const bPinned = pinnedIds.has(b.id) ? 1 : 0;
-        return bPinned - aPinned;
-      });
-    });
-
-    return columns;
-  }, [filteredFIRs, pinnedIds, statusCounts]);
-
-  const stats = {
-    total: Object.values(statusCounts).reduce((a, b) => a + b, 0),
-    pending: statusCounts["PENDING"] || 0,
-    active: (statusCounts["APPROVED"] || 0) + (statusCounts["UNDER_INVESTIGATION"] || 0) + (statusCounts["IN_PROGRESS"] || 0),
-    closed: (statusCounts["CLOSED"] || 0) + (statusCounts["REJECTED"] || 0),
+  // ── Kanban Column Definitions ──
+  const kanbanColumnsDef = {
+    PENDING: { title: "Pending Review", color: "bg-amber-100 text-amber-700" },
+    UNDER_INVESTIGATION: { title: "Under Investigation", color: "bg-blue-100 text-blue-700" },
+    IN_PROGRESS: { title: "In Progress", color: "bg-purple-100 text-purple-700" },
+    APPROVED: { title: "Approved", color: "bg-green-100 text-green-700" },
+    CLOSED: { title: "Closed / Rejected", color: "bg-slate-100 text-slate-700" },
   };
 
   const hasActiveFilters = debouncedSearch || complainantFilter || statusFilter !== "ALL" || priorityFilter !== "ALL" || typeFilter !== "ALL" || dateFilter;
@@ -834,61 +1059,116 @@ export default function PoliceDashboard() {
 
       <motion.div key={location.pathname} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
         <div className="space-y-6">
-          {/* ── STATS CARDS (Now using accurate DB counts) ── */}
+          {/* ── STATS CARDS ── */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Total FIRs", value: stats.total, icon: FileText, color: "text-primary" },
-              { label: "Pending Review", value: stats.pending, icon: Clock, color: "text-warning" },
-              { label: "Active Cases", value: stats.active, icon: CheckCircle, color: "text-success" },
-              { label: "Closed/Rejected", value: stats.closed, icon: XCircle, color: "text-muted-foreground" },
-            ].map((s) => (
-              <Card key={s.label}>
-                <CardContent className="flex items-center gap-4 p-4">
-                  <div className={`rounded-lg bg-muted p-3 ${s.color}`}><s.icon className="h-5 w-5" /></div>
-                  <div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold text-card-foreground">{s.value}</p></div>
-                </CardContent>
-              </Card>
+            {[{ label: "Total FIRs", value: globalStats.total, icon: FileText, color: "text-primary" }, { label: "Pending Review", value: globalStats.pending, icon: Clock, color: "text-warning" }, { label: "Active Cases", value: globalStats.active, icon: CheckCircle, color: "text-success" }, { label: "Closed/Rejected", value: globalStats.closed, icon: XCircle, color: "text-muted-foreground" }].map((s) => (
+              <Card key={s.label}><CardContent className="flex items-center gap-4 p-4"><div className={`rounded-lg bg-muted p-3 ${s.color}`}><s.icon className="h-5 w-5" /></div><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold text-card-foreground">{s.value}</p></div></CardContent></Card>
             ))}
           </div>
 
           {/* ── FILTER TOOLBAR ── */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            {/* ... Same filter toolbar code ... */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="hidden md:flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">{stats.total}</div>
+                <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">{globalStats.total}</div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{hasActiveFilters ? "Filtered FIRs" : "Total FIRs"}</span>
-                  <span className="text-sm font-medium text-slate-800">
-                    {pinnedIds.size > 0 && <span className="text-indigo-600">{pinnedIds.size} pinned</span>}
-                  </span>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total FIRs</span>
+                  <span className="text-sm font-medium text-slate-800">{pinnedIds.size > 0 && <span className="text-indigo-600">{pinnedIds.size} pinned</span>}</span>
                 </div>
               </div>
               <div className="flex flex-1 items-center gap-3 justify-end">
-                <div className="relative flex-1 max-w-xl">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  {/* UPDATED PLACEHOLDER TEXT HERE */}
-                  <Input placeholder="Search FIR #, Name, Description..." className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                </div>
+                <div className="relative flex-1 max-w-xl"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" /><Input placeholder="Search FIR #, Name, Description..." className="pl-10 h-11 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
                 <div className="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center h-11">
                   <Button variant="ghost" size="sm" className={`h-9 w-9 p-0 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700"}`} onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" className={`h-9 w-9 p-0 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700"}`} onClick={() => setViewMode("list")}><List className="h-4 w-4" /></Button>
                 </div>
-                {/* HELP BUTTON TRIGGER */}
                 <Button variant="ghost" size="icon" className="h-11 w-11 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg" onClick={handleOpenTour} title="Start Guide"><HelpCircle className="h-5 w-5" /></Button>
-                
                 <Button variant={showFilters ? "secondary" : "outline"} size="icon" className={`h-11 w-11 shrink-0 rounded-lg border-slate-200 ${showFilters ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-white hover:bg-slate-50"}`} onClick={() => setShowFilters(!showFilters)} title="Toggle Filters"><Filter className="h-4 w-4" /></Button>
               </div>
             </div>
             <AnimatePresence>
               {showFilters && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                  <div className="pt-4 mt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                    <div><Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Complainant</Label><div className="relative"><Users className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" /><Input placeholder="Name..." value={complainantFilter} onChange={(e) => setComplainantFilter(e.target.value)} className="pl-8 h-9 text-sm bg-white" /></div></div>
-                    <div><Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Status</Label><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="ALL">All Statuses</SelectItem><SelectItem value="PENDING">Pending</SelectItem><SelectItem value="APPROVED">Approved</SelectItem><SelectItem value="REJECTED">Rejected</SelectItem><SelectItem value="UNDER_INVESTIGATION">Under Inv.</SelectItem><SelectItem value="IN_PROGRESS">In Progress</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select></div>
-                    <div><Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Type</Label><Select value={typeFilter} onValueChange={setTypeFilter}><SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="ALL">All Types</SelectItem>{uniqueTypes.map((type) => (<SelectItem key={type} value={type}>{type}</SelectItem>))}</SelectContent></Select></div>
-                    <div><Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Priority</Label><Select value={priorityFilter} onValueChange={setPriorityFilter}><SelectTrigger className="h-9 text-sm bg-white"><SelectValue placeholder="Priority" /></SelectTrigger><SelectContent><SelectItem value="ALL">All Priorities</SelectItem><SelectItem value="EMERGENCY">Emergency</SelectItem><SelectItem value="HIGH">High</SelectItem><SelectItem value="MEDIUM">Medium</SelectItem><SelectItem value="LOW">Low</SelectItem></SelectContent></Select></div>
-                    <div><Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Date</Label><Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="h-9 text-sm bg-white" /></div>
-                    {hasActiveFilters && (<div className="sm:col-span-2 lg:col-span-5 flex justify-end mt-1"><Button variant="ghost" size="sm" onClick={resetFilters} className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8"><RefreshCcw className="h-3 w-3 mr-1.5" /> Reset Filters</Button></div>)}
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-4 mt-2 border-t border-slate-100 flex flex-wrap lg:flex-nowrap justify-between gap-4">
+
+                    {/* Complainant Filter */}
+                    <div className="w-full sm:w-[48%] lg:w-[22%]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Complainant</Label>
+                      <div className="relative">
+                        <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <Input
+                          placeholder="Name..."
+                          value={complainantFilter}
+                          onChange={(e) => setComplainantFilter(e.target.value)}
+                          className="pl-8 h-9 text-sm bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Type Filter */}
+                    <div className="w-full sm:w-[48%] lg:w-[22%]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Type</Label>
+                      <Select value={typeFilter} onValueChange={setTypeFilter}>
+                        <SelectTrigger className="h-9 text-sm bg-white">
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">All Types</SelectItem>
+                          {uniqueTypes.map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Priority Filter */}
+                    <div className="w-full sm:w-[48%] lg:w-[22%]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Priority</Label>
+                      <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                        <SelectTrigger className="h-9 text-sm bg-white">
+                          <SelectValue placeholder="Priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">All Priorities</SelectItem>
+                          <SelectItem value="EMERGENCY">Emergency</SelectItem>
+                          <SelectItem value="HIGH">High</SelectItem>
+                          <SelectItem value="MEDIUM">Medium</SelectItem>
+                          <SelectItem value="LOW">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Date Filter */}
+                    <div className="w-full sm:w-[48%] lg:w-[22%]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">Date</Label>
+                      <Input
+                        type="date"
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value)}
+                        className="h-9 text-sm bg-white"
+                      />
+                    </div>
+
+                    {/* Reset Button (Only shows if filters active) */}
+                    {hasActiveFilters && (
+                      <div className="w-full flex justify-end mt-2 lg:mt-6 lg:w-auto">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={resetFilters}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8"
+                        >
+                          <RefreshCcw className="h-3 w-3 mr-1.5" /> Reset Filters
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -896,26 +1176,23 @@ export default function PoliceDashboard() {
           </div>
 
           {/* ── CONTENT AREA ── */}
-          {isLoading ? (
-            <div className="text-center py-20"><Clock className="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" /><p className="text-muted-foreground">Loading FIRs...</p></div>
-          ) : filteredFIRs.length === 0 ? (
-            <Card><CardContent className="text-center py-12"><div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4"><Search className="h-8 w-8 text-slate-400" /></div><p className="text-slate-800 text-lg font-medium">No FIRs found matching criteria</p><Button variant="outline" onClick={resetFilters} className="mt-4">Clear All Filters</Button></CardContent></Card>
-          ) : (
-            <div className="min-h-[500px]">
-              {viewMode === "list" ? (
-                <div className="space-y-6">
-                  {groupedFIRs.map((group, groupIndex) => (
+          <div className="min-h-[500px]">
+            {viewMode === "list" ? (
+              // ── LIST VIEW RENDER ──
+              <div className="space-y-6">
+                {isLoading ? (
+                  <div className="text-center py-20"><Clock className="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" /><p className="text-muted-foreground">Loading List View...</p></div>
+                ) : filteredFIRs.length === 0 ? (
+                  <Card><CardContent className="text-center py-12"><div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4"><Search className="h-8 w-8 text-slate-400" /></div><p className="text-slate-800 text-lg font-medium">No FIRs found</p></CardContent></Card>
+                ) : (
+                  groupedFIRs.map((group, groupIndex) => (
                     <motion.div key={group.dateKey} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: groupIndex * 0.05 }}>
                       <Card className={`overflow-hidden border-slate-200 ${group.isPinnedSection ? "border-indigo-200 shadow-sm ring-1 ring-indigo-50" : ""}`}>
                         <button onClick={() => toggleDateCollapse(group.dateKey)} className={`w-full flex items-center justify-between p-4 transition-colors border-b ${group.isPinnedSection ? "bg-indigo-50/70 hover:bg-indigo-100/50" : "bg-slate-50/80 hover:bg-slate-100"}`}>
                           <div className="flex items-center gap-3">
                             <div className={`rounded-full p-2 ${group.isPinnedSection ? "bg-indigo-100" : "bg-slate-100"}`}>{group.isPinnedSection ? <Pin className="h-4 w-4 text-indigo-600 rotate-45" /> : <Calendar className="h-4 w-4 text-slate-600" />}</div>
                             <div className="text-left"><h3 className={`font-semibold ${group.isPinnedSection ? "text-indigo-900" : "text-slate-800"}`}>{group.relativeLabel}</h3>{(group.relativeLabel === "Today" || group.relativeLabel === "Yesterday") && <p className="text-xs text-slate-500">{group.dateLabel}</p>}</div>
-                            {/* ── DATE GROUP COUNT BADGE ── */}
-                            <span className={`ml-2 rounded-full px-2.5 py-0.5 text-xs font-bold ${group.isPinnedSection ? "bg-indigo-100 text-indigo-700" : "bg-indigo-100 text-indigo-700"}`}>
-                              {/* Use fetched date count, fallback to list length */}
-                              {group.isPinnedSection ? group.firs.length : (dateCounts[group.dateKey] || group.firs.length)}
-                            </span>
+                            <span className={`ml-2 rounded-full px-2.5 py-0.5 text-xs font-bold ${group.isPinnedSection ? "bg-indigo-100 text-indigo-700" : "bg-indigo-100 text-indigo-700"}`}>{group.isPinnedSection ? group.firs.length : (dateCounts[group.dateKey] || group.firs.length)}</span>
                           </div>
                           {collapsedDates.has(group.dateKey) ? <ChevronRight className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
                         </button>
@@ -941,14 +1218,7 @@ export default function PoliceDashboard() {
                                         </tr>
                                       );
                                     })}
-                                    {/* Indication if more items in date group exist but aren't loaded */}
-                                    {dateCounts[group.dateKey] > group.firs.length && (
-                                        <tr className="bg-slate-50/30">
-                                            <td colSpan={8} className="px-4 py-2 text-center text-xs text-slate-400 italic">
-                                                Showing {group.firs.length} of {dateCounts[group.dateKey]} items. Scroll down to load more.
-                                            </td>
-                                        </tr>
-                                    )}
+                                    {dateCounts[group.dateKey] > group.firs.length && (<tr className="bg-slate-50/30"><td colSpan={8} className="px-4 py-2 text-center text-xs text-slate-400 italic">Showing {group.firs.length} of {dateCounts[group.dateKey]} items. Scroll down to load more.</td></tr>)}
                                   </tbody>
                                 </table>
                               </div>
@@ -957,68 +1227,68 @@ export default function PoliceDashboard() {
                         )}
                       </Card>
                     </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-250px)]">
-                  {Object.entries(kanbanColumns).map(([statusKey, col]) => (
+                  ))
+                )}
+                {/* LIST INFINITE SCROLL */}
+                {viewMode === "list" && firs.length > 0 && (
+                  <div className="py-4">
+                    {isLoadingMore ? <div className="flex items-center justify-center gap-2 py-4"><Loader2 className="h-4 w-4 animate-spin text-indigo-500" /><span className="text-sm text-slate-500">Loading more FIRs...</span></div> : hasMore ? <div ref={sentinelRef} className="h-10 flex items-center justify-center"><span className="text-xs text-slate-400">Scroll for more</span></div> : <div className="text-center py-4"><span className="text-xs text-slate-400">All FIRs loaded</span></div>}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // ── GRID (KANBAN) VIEW RENDER ──
+              <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-250px)]">
+                {COLUMN_KEYS.map((statusKey) => {
+                  const colDef = kanbanColumnsDef[statusKey as keyof typeof kanbanColumnsDef];
+                  const colData = columnsData[statusKey];
+                  return (
                     <div key={statusKey} className={`min-w-[280px] w-[280px] flex flex-col rounded-xl border max-h-full transition-all duration-200 ${dragOverColumn === statusKey ? "bg-indigo-50 border-indigo-300 border-2 shadow-lg scale-[1.02]" : "bg-slate-50/50 border-slate-200/60"}`} onDragOver={(e) => handleDragOver(e, statusKey)} onDragLeave={handleDragLeave} onDrop={(e) => handleDrop(e, statusKey)}>
                       <div className="p-3 rounded-t-xl border-b border-slate-200 flex justify-between items-center bg-white">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${col.color.split(" ")[0]}`} />
-                          <span className="font-semibold text-sm text-slate-700">{col.title}</span>
+                          <div className={`w-2 h-2 rounded-full ${colDef.color.split(" ")[0]}`} />
+                          <span className="font-semibold text-sm text-slate-700">{colDef.title}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          {col.items.some((f) => pinnedIds.has(f.id)) && <Pin className="h-3 w-3 text-indigo-400 rotate-45" />}
-                          {/* ── SHOW ACCURATE DB COUNT HERE ── */}
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${col.color}`}>{col.totalCount}</span>
+                          {colData.items.some((f) => pinnedIds.has(f.id)) && <Pin className="h-3 w-3 text-indigo-400 rotate-45" />}
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${colDef.color}`}>{colData.total}</span>
                         </div>
                       </div>
+
                       <div className={`p-2 flex-1 overflow-y-auto space-y-2 custom-scrollbar transition-all ${dragOverColumn === statusKey ? "bg-indigo-50/50" : ""}`}>
-                        {col.items.length === 0 ? (
+                        {colData.items.length === 0 && !colData.loading ? (
                           <div className={`h-32 flex flex-col items-center justify-center border-2 border-dashed rounded-lg m-1 transition-all ${dragOverColumn === statusKey ? "border-indigo-300 bg-indigo-100/50 text-indigo-500" : "border-slate-200 text-slate-400"}`}>
                             {dragOverColumn === statusKey ? <><Download className="h-5 w-5 mb-1" /><span className="text-xs font-medium">Drop here</span></> : <><AlertTriangle className="h-5 w-5 mb-1 opacity-50" /><span className="text-xs">No items</span></>}
                           </div>
                         ) : (
-                          col.items.map((fir) => (<FIRCard key={fir.id} fir={fir} isPinned={pinnedIds.has(fir.id)} onClick={() => setSelectedFir(fir)} onContextMenu={handleCardContextMenu} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />))
+                          colData.items.map((fir) => (<FIRCard key={fir.id} fir={fir} isPinned={pinnedIds.has(fir.id)} onClick={() => setSelectedFir(fir)} onContextMenu={handleCardContextMenu} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />))
                         )}
-                        {/* ── SHOW INDICATION IF MORE ITEMS EXIST ── */}
-                        {col.items.length < col.totalCount && (
-                           <div className="text-center py-2 text-[10px] text-slate-400">
-                             Showing {col.items.length} of {col.totalCount}
-                           </div>
+
+                        {colData.hasMore && (
+                          <div className="pt-2 pb-1 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full text-xs h-7 text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
+                              onClick={() => loadColumnData(statusKey, colData.page + 1)}
+                              disabled={colData.loading}
+                            >
+                              {colData.loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ArrowDownCircle className="h-3 w-3 mr-1" />}
+                              Load More
+                            </Button>
+                          </div>
                         )}
+
+                        <div className="text-center py-1 text-[9px] text-slate-400">
+                          Showing {colData.items.length} of {colData.total}
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── INFINITE SCROLL SENTINEL ── */}
-          {!isLoading && firs.length > 0 && (
-            <>
-              {(viewMode === "list" || hasMore || isLoadingMore) && (
-                <div className="py-4">
-                  {isLoadingMore ? (
-                    <div className="flex items-center justify-center gap-2 py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
-                      <span className="text-sm text-slate-500">Loading more FIRs...</span>
-                    </div>
-                  ) : hasMore ? (
-                    <div ref={sentinelRef} className="h-10 flex items-center justify-center">
-                      <span className="text-xs text-slate-400">Scroll for more</span>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <span className="text-xs text-slate-400">All FIRs loaded</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -1028,20 +1298,80 @@ export default function PoliceDashboard() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4">
           {selectedFir && (
             <>
-              <DialogHeader className="pb-2"><DialogTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4 text-indigo-600" />{selectedFir.firNumber}<StatusBadge status={selectedFir.status} /><PriorityBadge priority={selectedFir.priority} />{pinnedIds.has(selectedFir.id) && (<Badge variant="outline" className="text-[10px] text-indigo-600 border-indigo-200 bg-indigo-50 gap-1"><Pin className="h-2.5 w-2.5 rotate-45" /> Pinned</Badge>)}</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Complainant</p><p className="font-bold text-slate-800 text-xs truncate">{selectedFir.complainantName}</p><p className="text-[10px] text-slate-400 truncate">{selectedFir.complainantEmail}</p></div>
-                  <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Incident Type</p><p className="font-bold text-slate-800 text-xs">{selectedFir.incidentType}</p></div>
-                  {selectedFir.location && (<div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Location</p><p className="text-xs text-slate-700 truncate">{selectedFir.location}</p></div>)}
-                  <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Filed On</p><p className="font-medium text-slate-700 text-[11px]">{formatDateTime(selectedFir.createdAt)}</p></div>
-                  <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Incident Date</p><p className="font-medium text-slate-700 text-[11px]">{formatDateTime(selectedFir.dateTime)}</p></div>
-                </div>
-                <div className="p-2.5 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Description</p><p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[80px] overflow-y-auto">{selectedFir.description}</p></div>
-                {selectedFir.remarks && (<div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 flex items-start gap-2"><AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" /><div><p className="text-[10px] font-semibold text-amber-600 uppercase">Remarks</p><p className="text-xs text-amber-800">{selectedFir.remarks}</p></div></div>)}
-                {selectedFir.evidenceFiles && selectedFir.evidenceFiles.length > 0 && (<div className="p-2.5 bg-slate-50 rounded-lg"><EvidenceFiles files={selectedFir.evidenceFiles} /></div>)}
-                <div className="border-t pt-4"><h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Update Status</h4><div className="grid grid-cols-2 gap-3"><div><Label className="text-xs text-slate-500 mb-1 block">New Status</Label><Select value={newStatus} onValueChange={setNewStatus}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select Status" /></SelectTrigger><SelectContent><SelectItem value="APPROVED">Approve</SelectItem><SelectItem value="REJECTED">Reject</SelectItem><SelectItem value="UNDER_INVESTIGATION">Under Investigation</SelectItem><SelectItem value="IN_PROGRESS">In Progress</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select></div><div><Label className="text-xs text-slate-500 mb-1 block">{newStatus === "REJECTED" ? "Rejection Reason" : "Remarks (Optional)"}</Label><Textarea placeholder={newStatus === "REJECTED" ? "Reason for rejection..." : "Add notes or remarks..."} value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={1} className="min-h-[36px] max-h-[80px] text-sm resize-y" /></div></div><div className="flex justify-end gap-2 mt-3"><Button variant="outline" size="sm" className="h-9 px-4" onClick={() => { setSelectedFir(null); setNewStatus(""); setRemarks(""); }}>Cancel</Button><Button size="sm" className="h-9 px-5" onClick={handleUpdateStatus} disabled={isUpdating || !newStatus}>{isUpdating ? "Saving..." : "Save Changes"}</Button></div></div>
-              </div>
+              <DialogHeader className="pb-2">
+                <DialogTitle className="flex items-center gap-2 text-base">
+                  <FileText className="h-4 w-4 text-indigo-600" />
+                  {selectedFir.firNumber}
+                  <StatusBadge status={selectedFir.status} />
+                  <PriorityBadge priority={selectedFir.priority} />
+                  {pinnedIds.has(selectedFir.id) && (<Badge variant="outline" className="text-[10px] text-indigo-600 border-indigo-200 bg-indigo-50 gap-1"><Pin className="h-2.5 w-2.5 rotate-45" /> Pinned</Badge>)}
+                </DialogTitle>
+              </DialogHeader>
+
+              {/* ── TABS FOR DETAILS & HISTORY ── */}
+              <Tabs defaultValue="details" className="w-full mt-2">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="details" className="flex items-center gap-2">
+                    <Edit3 className="h-3.5 w-3.5" /> Details
+                  </TabsTrigger>
+                  <TabsTrigger value="history" className="flex items-center gap-2">
+                    <History className="h-3.5 w-3.5" /> Audit History
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* ── DETAILS TAB ── */}
+                <TabsContent value="details" className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Complainant</p><p className="font-bold text-slate-800 text-xs truncate">{selectedFir.complainantName}</p><p className="text-[10px] text-slate-400 truncate">{selectedFir.complainantEmail}</p></div>
+                    <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Incident Type</p><p className="font-bold text-slate-800 text-xs">{selectedFir.incidentType}</p></div>
+                    {selectedFir.location && (<div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Location</p><p className="text-xs text-slate-700 truncate">{selectedFir.location}</p></div>)}
+                    <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Filed On</p><p className="font-medium text-slate-700 text-[11px]">{formatDateTime(selectedFir.createdAt)}</p></div>
+                    <div className="p-2 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase">Incident Date</p><p className="font-medium text-slate-700 text-[11px]">{formatDateTime(selectedFir.dateTime)}</p></div>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 rounded-lg"><p className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Description</p><p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap max-h-[80px] overflow-y-auto">{selectedFir.description}</p></div>
+                  {selectedFir.remarks && (<div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 flex items-start gap-2"><AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" /><div><p className="text-[10px] font-semibold text-amber-600 uppercase">Remarks</p><p className="text-xs text-amber-800">{selectedFir.remarks}</p></div></div>)}
+                  {selectedFir.evidenceFiles && selectedFir.evidenceFiles.length > 0 && (<div className="p-2.5 bg-slate-50 rounded-lg"><EvidenceFiles files={selectedFir.evidenceFiles} /></div>)}
+
+                  <div className="border-t pt-4"><h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Update Status</h4><div className="grid grid-cols-2 gap-3"><div><Label className="text-xs text-slate-500 mb-1 block">New Status</Label><Select value={newStatus} onValueChange={setNewStatus}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select Status" /></SelectTrigger><SelectContent><SelectItem value="APPROVED">Approve</SelectItem><SelectItem value="REJECTED">Reject</SelectItem><SelectItem value="UNDER_INVESTIGATION">Under Investigation</SelectItem><SelectItem value="IN_PROGRESS">In Progress</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select></div><div><Label className="text-xs text-slate-500 mb-1 block">{newStatus === "REJECTED" ? "Rejection Reason" : "Remarks (Optional)"}</Label><Textarea placeholder={newStatus === "REJECTED" ? "Reason for rejection..." : "Add notes or remarks..."} value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={1} className="min-h-[36px] max-h-[80px] text-sm resize-y" /></div></div><div className="flex justify-end gap-2 mt-3"><Button variant="outline" size="sm" className="h-9 px-4" onClick={() => { setSelectedFir(null); setNewStatus(""); setRemarks(""); }}>Cancel</Button><Button size="sm" className="h-9 px-5" onClick={handleUpdateStatus} disabled={isUpdating || !newStatus}>{isUpdating ? "Saving..." : "Save Changes"}</Button></div></div>
+                </TabsContent>
+
+                {/* ── HISTORY TAB ── */}
+                <TabsContent value="history" className="h-[400px]">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 pt-2">
+                      {selectedFir.history && selectedFir.history.length > 0 ? (
+                        selectedFir.history.map((log: AuditLog) => (
+                          <div key={log.id} className="flex gap-4 relative pl-2 group">
+                            {/* Timeline Line */}
+                            <div className="absolute left-[5px] top-2 bottom-[-20px] w-0.5 bg-slate-200 group-last:hidden"></div>
+                            <div className={`relative z-10 w-3 h-3 rounded-full mt-1.5 shrink-0 border-2 border-white shadow-sm ${log.action === 'STATUS_CHANGE' ? 'bg-blue-500' : log.action === 'PINNED' ? 'bg-indigo-500' : 'bg-slate-400'}`}></div>
+
+                            <div className="flex-1 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                              <div className="flex justify-between items-start mb-1">
+                                <p className="text-xs font-bold text-slate-800">
+                                  {log.action === "STATUS_CHANGE" ? "Status Updated" : log.action === "PINNED" ? "Pinned" : log.action === "UNPINNED" ? "Unpinned" : "Comment Added"}
+                                </p>
+                                <span className="text-[10px] text-slate-400 whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</span>
+                              </div>
+                              <p className="text-xs text-slate-600 mb-2">{log.description}</p>
+                              <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200/60 mt-2">
+                                <div className="h-5 w-5 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700">{log.officerName.charAt(0)}</div>
+                                <span className="text-[10px] font-medium text-slate-500">{log.officerName}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                          <History className="h-12 w-12 text-slate-200 mb-3" />
+                          <p className="text-sm font-medium text-slate-500">No history available</p>
+                          <p className="text-xs text-slate-400">Actions taken on this FIR will appear here.</p>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </DialogContent>

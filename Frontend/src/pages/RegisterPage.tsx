@@ -43,7 +43,7 @@ export default function RegisterPage() {
 
     if (!validatePassword(value)) {
       setPasswordError(
-        "Minimum 6 characters, 1 uppercase, 1 number & 1 special character required."
+        "Minimum 6 characters, 1 uppercase, number & 1 special character required."
       );
     } else {
       setPasswordError("");
@@ -73,7 +73,7 @@ export default function RegisterPage() {
       toast({
         title: "Invalid Password",
         description:
-          "Password must be at least 6 characters and include 1 uppercase, 1 number & 1 special character.",
+          "Password must be at least 6 characters and include 1 uppercase, number & 1 special character.",
         variant: "destructive",
       });
       return;
@@ -201,19 +201,6 @@ export default function RegisterPage() {
                   required
                   disabled={isSubmitting}
                 />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowPassword(!showPassword)
-                  }
-                  className="absolute right-3 top-2.5 text-muted-foreground"
-                >
-                  {showPassword ? (
-                    <EyeOff size={18} />
-                  ) : (
-                    <Eye size={18} />
-                  )}
-                </button>
               </div>
               {passwordError && (
                 <p className="text-sm text-red-500 mt-1">

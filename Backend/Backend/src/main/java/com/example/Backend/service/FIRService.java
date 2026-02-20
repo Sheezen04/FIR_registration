@@ -2,6 +2,7 @@ package com.example.Backend.service;
 
 import com.example.Backend.dto.*;
 import com.example.Backend.entity.*;
+import com.example.Backend.repository.FIRHistoryRepository;
 import com.example.Backend.repository.FIRRepository;
 import com.example.Backend.repository.UserRepository;
 import com.example.Backend.specification.FIRSpecification;
@@ -26,6 +27,7 @@ public class FIRService {
 
     private final FIRRepository firRepository;
     private final UserRepository userRepository;
+    private final FIRHistoryRepository firHistoryRepository; // ✅ Added Repository
 
     @Transactional
     public FIRResponse createFIR(FIRRequest request, User user) {
@@ -46,6 +48,10 @@ public class FIRService {
         }
 
         fir = firRepository.save(fir);
+        
+        // Optional: Log creation event
+        createHistoryLog(fir, user, "CREATED", "FIR Filed by " + user.getName());
+
         return mapToResponse(fir);
     }
 
@@ -131,23 +137,35 @@ public class FIRService {
         return mapToResponse(fir);
     }
 
+    // ✅ UPDATED: Now accepts User for logging history
     @Transactional
-    public FIRResponse updateFIRStatus(Long id, UpdateFIRStatusRequest request) {
+    public FIRResponse updateFIRStatus(Long id, UpdateFIRStatusRequest request, User currentUser) {
         FIR fir = firRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("FIR not found"));
 
-        if (request.getStatus() != null) {
+        // 1. Status Change Log
+        if (request.getStatus() != null && fir.getStatus() != request.getStatus()) {
+            String desc = "Status changed from " + fir.getStatus() + " to " + request.getStatus();
+            createHistoryLog(fir, currentUser, "STATUS_CHANGE", desc);
             fir.setStatus(request.getStatus());
         }
 
+        // 2. Remarks Log
         if (request.getRemarks() != null && !request.getRemarks().isEmpty()) {
-            fir.setRemarks(request.getRemarks());
+            // Only log if remarks actually changed
+            if (!request.getRemarks().equals(fir.getRemarks())) {
+                createHistoryLog(fir, currentUser, "COMMENT", "Added/Updated remark: " + request.getRemarks());
+                fir.setRemarks(request.getRemarks());
+            }
         }
 
         if (request.getActionNote() != null && !request.getActionNote().isEmpty()) {
             fir.getActionNotes().add(request.getActionNote());
+            // Optional: Log action note addition
+            createHistoryLog(fir, currentUser, "NOTE", "Added action note");
         }
 
+        // 3. Assignment Logs
         if (request.getAssignedStation() != null) {
             fir.setAssignedStation(request.getAssignedStation());
         }
@@ -162,6 +180,17 @@ public class FIRService {
 
         fir = firRepository.save(fir);
         return mapToResponse(fir);
+    }
+
+    // ✅ Helper to save history
+    private void createHistoryLog(FIR fir, User user, String action, String description) {
+        FIRHistory history = FIRHistory.builder()
+                .fir(fir)
+                .changedBy(user)
+                .action(action)
+                .description(description)
+                .build();
+        firHistoryRepository.save(history);
     }
 
     public DashboardStats getDashboardStats() {
@@ -203,7 +232,21 @@ public class FIRService {
         return "FIR-" + Year.now().getValue() + "-" + String.format("%04d", count);
     }
 
+    // ✅ Updated to map history
     private FIRResponse mapToResponse(FIR fir) {
+        
+        // Fetch history logs
+        List<FIRHistoryDTO> historyLogs = firHistoryRepository.findByFirIdOrderByTimestampDesc(fir.getId())
+                .stream()
+                .map(h -> FIRHistoryDTO.builder()
+                        .id(h.getId())
+                        .action(h.getAction())
+                        .description(h.getDescription())
+                        .officerName(h.getChangedBy() != null ? h.getChangedBy().getName() : "System")
+                        .timestamp(h.getTimestamp())
+                        .build())
+                .collect(Collectors.toList());
+
         return FIRResponse.builder()
                 .id(fir.getId())
                 .firNumber(fir.getFirNumber())
@@ -222,6 +265,7 @@ public class FIRService {
                 .evidenceFiles(fir.getEvidenceFiles())
                 .createdAt(fir.getCreatedAt())
                 .updatedAt(fir.getUpdatedAt())
+                .history(historyLogs) // ✅ Add history list to response
                 .build();
     }
 }
