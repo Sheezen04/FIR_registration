@@ -10,7 +10,8 @@ import {
   ChevronDown, ChevronRight, ChevronLeft, Search, Filter, Scale, Paperclip, FileImage, FileIcon,
   ZoomIn, ZoomOut, RotateCw, Maximize2, Download, Eye, File, RefreshCcw, LayoutGrid,
   List, Pin, PinOff, Loader2, AlertTriangle, HelpCircle, CheckCircle2, MousePointer2, X,
-  History, Edit3, ArrowDownCircle
+  History, Edit3, ArrowDownCircle,
+  MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const navItems = [
   { label: "Dashboard", href: "/police/dashboard", icon: <Shield className="h-4 w-4" /> },
   { label: "Calendar of F.I.Rs", href: "/police/calendar", icon: <Calendar className="h-4 w-4" /> },
+  { label: "Chat", href: "/police/chat", icon: <MessageCircle className="h-4 w-4" /> },
   { label: "Rules & Laws", href: "/police/rules", icon: <Scale className="h-4 w-4" /> },
 ];
 

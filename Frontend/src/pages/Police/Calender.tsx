@@ -32,6 +32,7 @@ import {
   Eye,
   File,
   AlertTriangle,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,7 @@ import { useToast } from "@/hooks/use-toast";
 const navItems = [
   { label: "Dashboard", href: "/police/dashboard", icon: <Shield className="h-4 w-4" /> },
   { label: "Calendar of F.I.Rs", href: "/police/calendar", icon: <CalendarIcon className="h-4 w-4" /> },
+  { label: "Chat", href: "/police/chat", icon: <MessageCircle className="h-4 w-4" /> },
   { label: "Rules & Laws", href: "/police/rules", icon: <Scale className="h-4 w-4" /> },
 ];
 
