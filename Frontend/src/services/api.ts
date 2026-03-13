@@ -99,7 +99,6 @@ export interface UpdateFIRStatusRequest {
   assignedOfficerId?: number;
 }
 
-// ✅ ADDED: Interface for Profile Update
 export interface UpdateProfileRequest {
   name: string;
   email: string;
@@ -131,7 +130,6 @@ export interface DashboardStats {
   firsByStatus: Record<string, number>;
 }
 
-// Paginated Response Types
 export interface PagedResponse<T> {
   content: T[];
   page: number;
@@ -187,7 +185,7 @@ export const firApi = {
   getStats: () => api.get<DashboardStats>('/fir/stats'),
 };
 
-// User API (Admin only)
+// User API
 export const userApi = {
   getAll: () => api.get<UserResponse[]>('/admin/users'),
   getByRole: (role: string) => api.get<UserResponse[]>(`/admin/users/role/${role}`),
@@ -196,8 +194,6 @@ export const userApi = {
     api.post<UserResponse>('/admin/users', data),
   delete: (id: number) => api.delete(`/admin/users/${id}`),
   getPoliceOfficers: () => api.get<UserResponse[]>('/admin/users/police'),
-  
-  // ✅ ADDED: Profile Update Method
   updateProfile: (data: UpdateProfileRequest) => api.put<UserResponse>('/users/profile', data),
 };
 
@@ -205,9 +201,11 @@ export const userApi = {
 export const fileApi = {
   upload: (files: File[]) => {
     const formData = new FormData();
+    // 'files' must match the @RequestParam in Spring Boot
     files.forEach(file => {
       formData.append('files', file);
     });
+    // This returns string[] which are the full URLs now
     return api.post<string[]>('/files/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -215,7 +213,8 @@ export const fileApi = {
     });
   },
   getDownloadUrl: (filePath: string) => {
-    // Extract filename from path like "uploads/filename.jpg"
+    // Legacy helper if needed, but upload now returns full URL
+    if (filePath.startsWith("http")) return filePath;
     const filename = filePath.replace('uploads/', '');
     return `/api/files/download/${filename}`;
   },

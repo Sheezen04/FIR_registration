@@ -1,5 +1,3 @@
-// src/pages/Police/PoliceChat.tsx
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -11,6 +9,7 @@ import {
   Conversation,
   ChatUser,
 } from "@/services/ChatService";
+import { fileApi } from "@/services/api"; 
 import {
   Shield,
   Scale,
@@ -33,6 +32,10 @@ import {
   Video as VideoIcon,
   Headphones,
   Download,
+  Pin,
+  PinOff,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -121,7 +124,15 @@ export default function PoliceChat() {
   // UI States
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  
+  const [isUploading, setIsUploading] = useState(false);
+
+  // ── NEW FEATURES STATES ──
+  const [pinnedChatIds, setPinnedChatIds] = useState<Set<string>>(new Set());
+  const [isSearchingChat, setIsSearchingChat] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
   // Download State
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadedFiles, setDownloadedFiles] = useState<Record<string, boolean>>({});
@@ -131,9 +142,13 @@ export default function PoliceChat() {
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const isUserAtBottomRef = useRef(true); 
   
+  // Ref to store message elements for scrolling
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatSearchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Derived active conversation and user ──
   const activeConversation = useMemo(() => {
@@ -167,48 +182,41 @@ export default function PoliceChat() {
   }, [currentUserId]);
 
   const loadPoliceUsers = useCallback(async () => {
-  try {
-    const users = await chatService.getUsers();
-    console.log("Police Users:", users);
-    setPoliceUsers(users);
-  } catch (err) {
-    console.error("[Chat] Failed to load police users:", err);
-  }
-}, []);
+    try {
+      const users = await chatService.getUsers();
+      setPoliceUsers(users);
+    } catch (err) {
+      console.error("[Chat] Failed to load police users:", err);
+    }
+  }, []);
 
   // ── WebSocket Connection ──
   useEffect(() => {
-  if (!currentUserId || !token) return;
+    if (!currentUserId || !token) return;
 
-  wsManager.connect(currentUserId, token);
+    wsManager.connect(currentUserId, token);
 
-  const init = async () => {
-    await loadPoliceUsers();
-    await loadConversations();
-  };
+    const init = async () => {
+      await loadPoliceUsers();
+      await loadConversations();
+    };
 
-  init();
+    init();
 
-    // Listen for real-time messages
     const unsubMsg = wsManager.onMessage((msg) => {
-      // Update messages if we're in the right conversation
       setMessages(prev => {
         const otherUserId = msg.senderId === currentUserId ? msg.receiverId : msg.senderId;
         if (otherUserId === activeOtherUserId) {
-          // Avoid duplicates
           if (prev.some(m => m.id === msg.id)) return prev;
           return [...prev, msg];
         }
         return prev;
       });
-      // Refresh conversations list
       loadConversations();
     });
 
-    // Listen for typing notifications
     const unsubTyping = wsManager.onTyping((data) => {
       setTypingUsers(prev => ({ ...prev, [data.senderId]: data.typing }));
-      // Auto-clear typing after 3s
       if (data.typing) {
         setTimeout(() => {
           setTypingUsers(prev => ({ ...prev, [data.senderId]: false }));
@@ -216,24 +224,19 @@ export default function PoliceChat() {
       }
     });
 
-    // Listen for online/offline status changes
     const unsubStatus = wsManager.onStatusChange((data) => {
-      // Update conversations
       setConversations(prev => prev.map(c => ({
         ...c,
         participants: c.participants.map(p =>
           p.id === data.userId ? { ...p, isOnline: data.online, lastSeen: data.lastSeen } : p
         ),
       })));
-      // Update police users list
       setPoliceUsers(prev => prev.map(u =>
         u.id === data.userId ? { ...u, isOnline: data.online, lastSeen: data.lastSeen } : u
       ));
     });
 
-    // Listen for read receipts
     const unsubRead = wsManager.onReadReceipt((data) => {
-      // Update message statuses
       setMessages(prev => prev.map(m =>
         m.senderId === currentUserId && m.receiverId === data.readerId
           ? { ...m, status: "read" as const }
@@ -248,18 +251,14 @@ export default function PoliceChat() {
       unsubRead();
       wsManager.disconnect();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId, token]);
 
-  // Reload messages when active conversation changes
   useEffect(() => {
     if (activeOtherUserId) {
       loadMessages(activeOtherUserId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOtherUserId]);
 
-  // Re-subscribe to messages when activeOtherUserId changes (for real-time updates)
   useEffect(() => {
     if (!currentUserId) return;
     const unsubMsg = wsManager.onMessage((msg) => {
@@ -275,7 +274,6 @@ export default function PoliceChat() {
     return () => unsubMsg();
   }, [activeOtherUserId, currentUserId, loadConversations]);
 
-  // Mobile check
   useEffect(() => {
     const checkMobile = () => setIsMobileView(window.innerWidth < 768);
     checkMobile();
@@ -289,15 +287,15 @@ export default function PoliceChat() {
   };
 
   useEffect(() => {
-    if (activeOtherUserId) {
+    if (activeOtherUserId && !isSearchingChat) {
       isUserAtBottomRef.current = true;
       setTimeout(() => scrollToBottom(false), 50);
     }
-  }, [activeOtherUserId]);
+  }, [activeOtherUserId, isSearchingChat]);
 
   useEffect(() => {
-    if (isUserAtBottomRef.current) scrollToBottom();
-  }, [messages]);
+    if (isUserAtBottomRef.current && !isSearchingChat) scrollToBottom();
+  }, [messages, isSearchingChat]);
 
   const handleScroll = () => {
     if (!scrollViewportRef.current) return;
@@ -306,37 +304,107 @@ export default function PoliceChat() {
     isUserAtBottomRef.current = distanceFromBottom < 100;
   };
 
+  // ── SEARCH LOGIC: Find Matches and Scroll ──
+  useEffect(() => {
+    if (!chatSearchQuery.trim()) {
+      setSearchResults([]);
+      setCurrentMatchIndex(0);
+      return;
+    }
+
+    const query = chatSearchQuery.toLowerCase();
+    // Find all message IDs that match
+    const matches = messages
+      .filter(m => m.content.toLowerCase().includes(query))
+      .map(m => m.id);
+    
+    setSearchResults(matches);
+    
+    // Reset to last match (newest) when query changes
+    if (matches.length > 0) {
+      setCurrentMatchIndex(matches.length - 1);
+    }
+  }, [chatSearchQuery, messages]);
+
+  // Scroll to active match when index or results change
+  useEffect(() => {
+    if (searchResults.length > 0 && isSearchingChat) {
+      const activeMsgId = searchResults[currentMatchIndex];
+      const element = messageRefs.current.get(activeMsgId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [currentMatchIndex, searchResults, isSearchingChat]);
+
+  const handleNextMatch = () => {
+    if (searchResults.length === 0) return;
+    setCurrentMatchIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : 0));
+  };
+
+  const handlePrevMatch = () => {
+    if (searchResults.length === 0) return;
+    setCurrentMatchIndex(prev => (prev > 0 ? prev - 1 : searchResults.length - 1));
+  };
+
+  // ── SORTED CONVERSATIONS ──
   const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) return conversations;
-    const query = searchQuery.toLowerCase();
-    return conversations.filter(c => c.participants.some(p => p.name.toLowerCase().includes(query)) || c.lastMessage?.content.toLowerCase().includes(query));
-  }, [conversations, searchQuery]);
+    let filtered = conversations;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = conversations.filter(c => c.participants.some(p => p.name.toLowerCase().includes(query)) || c.lastMessage?.content.toLowerCase().includes(query));
+    }
+    return filtered.sort((a, b) => {
+      const aId = a.participants[0]?.id;
+      const bId = b.participants[0]?.id;
+      const aPinned = pinnedChatIds.has(aId);
+      const bPinned = pinnedChatIds.has(bId);
+
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return new Date(b.lastMessage?.timestamp || b.updatedAt).getTime() - new Date(a.lastMessage?.timestamp || a.updatedAt).getTime();
+    });
+  }, [conversations, searchQuery, pinnedChatIds]);
 
   // ── Actions ──
   const selectConversation = (otherUserId: string) => {
     setActiveOtherUserId(otherUserId);
-    // Mark messages as read
     chatService.markAsRead(otherUserId).then(() => loadConversations());
     loadMessages(otherUserId);
     setShowUserList(false);
+    setIsSearchingChat(false);
+    setChatSearchQuery("");
     if (isMobileView) setShowChatOnMobile(true);
+  };
+
+  const togglePinChat = (e: Event | React.MouseEvent, otherUserId: string) => {
+    e.stopPropagation();
+    setPinnedChatIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(otherUserId)) newSet.delete(otherUserId);
+      else newSet.add(otherUserId);
+      return newSet;
+    });
+  };
+
+  const toggleChatSearch = () => {
+    setIsSearchingChat(prev => {
+      if (!prev) setTimeout(() => chatSearchInputRef.current?.focus(), 100);
+      else setChatSearchQuery("");
+      return !prev;
+    });
   };
 
   const sendMessage = () => {
     if (!newMessage.trim() || !activeOtherUserId || !activeUser) return;
-    
-    // Send via WebSocket
     chatService.sendMessage(activeOtherUserId, newMessage.trim(), "TEXT", undefined, replyingTo?.id);
-    
     setNewMessage("");
     setReplyingTo(null);
     setShowEmojiPicker(false);
-    
     isUserAtBottomRef.current = true;
     setTimeout(() => scrollToBottom(), 100);
   };
 
-  // ── Typing indicator ──
   const handleTyping = () => {
     if (!activeOtherUserId) return;
     chatService.sendTyping(activeOtherUserId, true);
@@ -346,46 +414,35 @@ export default function PoliceChat() {
     }, 2000);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && activeOtherUserId && activeUser) {
-      const fileUrl = URL.createObjectURL(file);
-      let type: "TEXT" | "IMAGE" | "VIDEO" | "AUDIO" | "PDF" = "TEXT";
-      
-      if (file.type.startsWith("image/")) type = "IMAGE";
-      else if (file.type.startsWith("video/")) type = "VIDEO";
-      else if (file.type.startsWith("audio/")) type = "AUDIO";
-      else if (file.type === "application/pdf") type = "PDF";
-      else type = "TEXT";
+      setIsUploading(true);
+      try {
+        let type: "TEXT" | "IMAGE" | "VIDEO" | "AUDIO" | "PDF" = "TEXT";
+        if (file.type.startsWith("image/")) type = "IMAGE";
+        else if (file.type.startsWith("video/")) type = "VIDEO";
+        else if (file.type.startsWith("audio/")) type = "AUDIO";
+        else if (file.type === "application/pdf") type = "PDF";
+        else type = "TEXT";
 
-      const content = type === "TEXT" ? `📎 ${file.name}` : fileUrl;
-      chatService.sendMessage(activeOtherUserId, content, type, undefined, replyingTo?.id);
-      
-      isUserAtBottomRef.current = true;
-      if (fileInputRef.current) fileInputRef.current.value = "";
+        const response = await fileApi.upload([file]);
+        const serverFileUrl = response.data[0];
+
+        if (!serverFileUrl) throw new Error("No URL returned from server");
+
+        const content = type === "TEXT" ? `📎 ${file.name}` : serverFileUrl;
+        chatService.sendMessage(activeOtherUserId, content, type, undefined, replyingTo?.id);
+        
+        isUserAtBottomRef.current = true;
+      } catch (error) {
+        console.error("Upload failed", error);
+        alert("Failed to upload file. Please check your connection.");
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
     }
-  };
-
-  const simulateDownload = (msgId: string, url: string, filename: string = "document") => {
-    if (downloadProgress[msgId] !== undefined) return;
-    setDownloadProgress(prev => ({ ...prev, [msgId]: 0 }));
-    const interval = setInterval(() => {
-      setDownloadProgress(prev => {
-        const current = prev[msgId] || 0;
-        if (current >= 100) {
-          clearInterval(interval);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = filename;
-          link.click();
-          setDownloadedFiles(prev => ({ ...prev, [msgId]: true }));
-          const newState = { ...prev };
-          delete newState[msgId];
-          return newState;
-        }
-        return { ...prev, [msgId]: Math.min(current + Math.random() * 20, 100) };
-      });
-    }, 200);
   };
 
   const cancelDownload = (e: React.MouseEvent, msgId: string) => {
@@ -397,7 +454,27 @@ export default function PoliceChat() {
     });
   };
 
+  // Helper to highlight text
+  const HighlightText = ({ text, highlight, isActive }: { text: string, highlight: string, isActive: boolean }) => {
+    if (!highlight.trim()) return <>{text}</>;
+    
+    const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) => 
+          part.toLowerCase() === highlight.toLowerCase() ? 
+            <span key={i} className={`${isActive ? "bg-orange-400 text-white" : "bg-yellow-200 text-slate-800"} font-medium px-0.5 rounded transition-colors duration-300`}>{part}</span> : 
+            part
+        )}
+      </>
+    );
+  };
+
   const renderMessageContent = (msg: ChatMessage, isMine: boolean) => {
+    // Check if this message matches search and if it is the CURRENTLY focused one
+    const isMatched = searchResults.includes(msg.id);
+    const isFocused = isMatched && searchResults[currentMatchIndex] === msg.id;
+
     const isDownloaded = downloadedFiles[msg.id] || isMine;
     const progress = downloadProgress[msg.id];
     const isDownloading = progress !== undefined;
@@ -405,7 +482,12 @@ export default function PoliceChat() {
     if (msg.type === "image") {
       return (
         <div className="relative group/image" onClick={(e) => { e.stopPropagation(); setSelectedImage(msg.content); }}>
-          <img src={msg.content} alt="Attachment" className={`rounded-lg max-h-[300px] w-auto object-cover transition-opacity cursor-pointer ${isDownloading ? "opacity-50 blur-sm" : "hover:opacity-95"}`} />
+          <img 
+            src={msg.content} 
+            alt="Attachment" 
+            className={`rounded-lg max-h-[300px] w-auto object-cover transition-opacity cursor-pointer ${isDownloading ? "opacity-50 blur-sm" : "hover:opacity-95"}`} 
+            onError={(e) => { e.currentTarget.style.display='none'; }}
+          />
           {isDownloading && <div className="absolute inset-0 flex items-center justify-center"><CircularProgress progress={progress} onClick={(e) => cancelDownload(e, msg.id)} /></div>}
         </div>
       );
@@ -428,13 +510,13 @@ export default function PoliceChat() {
       );
     }
 
-    if (msg.type === "pdf") {
+    if (msg.type === "pdf" || msg.type === "file") {
+      const fileName = msg.content.split('/').pop() || "Document";
       return (
         <div 
           onClick={(e) => {
              e.stopPropagation();
-             if (isDownloaded) window.open(msg.content, "_blank");
-             else if (!isDownloading) simulateDownload(msg.id, msg.content, "document.pdf");
+             window.open(msg.content, "_blank");
           }}
           className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border select-none ${isMine ? "bg-white/10 hover:bg-white/20 border-white/20" : "bg-slate-50 hover:bg-slate-100 border-slate-200"}`}
         >
@@ -448,15 +530,21 @@ export default function PoliceChat() {
              )}
           </div>
           <div className="flex-1 overflow-hidden min-w-[140px]">
-            <p className="text-sm font-bold truncate">Police_Report.pdf</p>
+            <p className="text-sm font-bold truncate">{fileName.length > 20 ? fileName.substring(0, 15) + "..." : fileName}</p>
             <div className={`flex items-center gap-1.5 text-xs truncate ${isMine ? "text-indigo-100" : "text-slate-500"}`}>
-              {isDownloading ? <span className="text-green-500 font-medium">{Math.round(progress)}% • {(progress * 0.05).toFixed(1)} MB / 5.0 MB</span> : <><span>5.0 MB</span> • <span>PDF</span></>}
+              <span>Attachment</span>
             </div>
           </div>
         </div>
       );
     }
-    return <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>;
+
+    // Text message with highlighting support
+    return (
+      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+        {chatSearchQuery ? <HighlightText text={msg.content} highlight={chatSearchQuery} isActive={isFocused} /> : msg.content}
+      </p>
+    );
   };
 
   return (
@@ -511,11 +599,21 @@ export default function PoliceChat() {
               filteredConversations.map((conv) => {
                 const participant = conv.participants[0];
                 const isActive = participant.id === activeOtherUserId;
+                const isPinned = pinnedChatIds.has(participant.id);
                 return (
                   <button key={conv.id} onClick={() => selectConversation(participant.id)} className={`w-full flex items-center gap-3 p-4 border-b border-slate-100 transition-all hover:bg-slate-50 ${isActive ? "bg-indigo-50 border-l-4 border-l-indigo-500" : ""}`}>
-                    <div className="relative shrink-0"><div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getAvatarColor(participant.id)} flex items-center justify-center text-white font-bold text-sm`}>{getInitials(participant.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={participant.isOnline} size="md" /></div></div>
+                    <div className="relative shrink-0">
+                      <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getAvatarColor(participant.id)} flex items-center justify-center text-white font-bold text-sm`}>{getInitials(participant.name)}</div>
+                      <div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={participant.isOnline} size="md" /></div>
+                    </div>
                     <div className="flex-1 min-w-0 text-left">
-                      <div className="flex items-center justify-between gap-2"><h3 className={`text-sm font-semibold truncate ${isActive ? "text-indigo-700" : "text-slate-800"}`}>{participant.name}</h3><span className="text-[10px] text-slate-400 shrink-0">{conv.lastMessage ? formatMessageTime(conv.lastMessage.timestamp) : ""}</span></div>
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className={`text-sm font-semibold truncate ${isActive ? "text-indigo-700" : "text-slate-800"}`}>{participant.name}</h3>
+                        <div className="flex items-center gap-1">
+                          {isPinned && <Pin className="w-3 h-3 text-slate-400 rotate-45" />}
+                          <span className="text-[10px] text-slate-400 shrink-0">{conv.lastMessage ? formatMessageTime(conv.lastMessage.timestamp) : ""}</span>
+                        </div>
+                      </div>
                       <div className="flex items-center justify-between gap-2 mt-1">
                         <p className="text-xs text-slate-500 truncate flex items-center gap-1">{conv.lastMessage?.senderId === currentUserId && <MessageStatus status={conv.lastMessage.status} />}{conv.lastMessage?.content || "Start chatting..."}</p>
                         {conv.unreadCount > 0 && <span className="shrink-0 w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center">{conv.unreadCount}</span>}
@@ -526,25 +624,8 @@ export default function PoliceChat() {
               })
             ) : (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                {policeUsers.length > 0 ? (
-                  <div className="w-full">
-                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Available Officers</p>
-                    <div className="space-y-1">
-                      {policeUsers.filter(u => !searchQuery.trim() || u.name.toLowerCase().includes(searchQuery.toLowerCase())).map((u) => (
-                        <button key={u.id} onClick={() => selectConversation(u.id)} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-indigo-50 transition-all">
-                          <div className="relative"><div className={`w-11 h-11 rounded-full bg-gradient-to-br ${getAvatarColor(u.id)} flex items-center justify-center text-white font-bold text-xs`}>{getInitials(u.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={u.isOnline} size="md" /></div></div>
-                          <div className="text-left flex-1 min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p><p className="text-xs text-slate-500 truncate">{u.station || (u.isOnline ? "Online" : "Offline")}</p></div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4"><MessageCircle className="w-8 h-8 text-slate-400" /></div>
-                    <p className="text-sm font-semibold text-slate-600 mb-1">No conversations yet</p>
-                    <p className="text-xs text-slate-400">Click the <span className="text-indigo-500 font-medium">+</span> button above to start a new chat</p>
-                  </div>
-                )}
+                 <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4"><MessageCircle className="w-8 h-8 text-slate-400" /></div>
+                 <p className="text-sm font-semibold text-slate-600 mb-1">No conversations</p>
               </div>
             )}
           </div>
@@ -558,13 +639,88 @@ export default function PoliceChat() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between px-5 py-3 bg-white border-b-2 border-slate-200 shadow-sm">
-                <div className="flex items-center gap-3">
-                  {isMobileView && <button onClick={() => setShowChatOnMobile(false)} className="p-2"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>}
-                  <div className="relative"><div className={`w-11 h-11 rounded-full bg-gradient-to-br ${getAvatarColor(activeUser.id)} flex items-center justify-center text-white font-bold text-sm`}>{getInitials(activeUser.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={activeUser.isOnline} size="md" /></div></div>
-                  <div><h3 className="font-bold text-slate-800 text-sm">{activeUser.name}</h3><p className="text-xs text-slate-500">{isTyping ? <span className="text-green-600">typing...</span> : activeUser.isOnline ? <span className="text-green-600">Online</span> : <span className="text-slate-400">Offline</span>}</p></div>
-                </div>
-                <button className="p-2 hover:bg-slate-100 rounded-lg"><MoreVertical className="w-5 h-5 text-slate-500" /></button>
+              {/* HEADER WITH PIN & SEARCH */}
+              <div className="flex items-center justify-between px-5 py-3 bg-white border-b-2 border-slate-200 shadow-sm transition-all h-[70px]">
+                {isSearchingChat ? (
+                  // SEARCH MODE HEADER
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3 w-full">
+                    <button onClick={toggleChatSearch} className="p-2 rounded-full hover:bg-slate-100"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input 
+                        ref={chatSearchInputRef}
+                        value={chatSearchQuery} 
+                        onChange={(e) => setChatSearchQuery(e.target.value)} 
+                        placeholder="Search in conversation..." 
+                        className="pl-9 bg-slate-50 border-slate-200"
+                        onKeyDown={(e) => {
+                           if(e.key === "Enter") {
+                               e.preventDefault();
+                               handlePrevMatch(); // Usually enter goes to "next" (upwards in chat context)
+                           }
+                        }}
+                      />
+                    </div>
+                    
+                    {/* SEARCH CONTROLS */}
+                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                        <button 
+                          onClick={handlePrevMatch} 
+                          disabled={searchResults.length === 0}
+                          className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-50"
+                          title="Previous Match"
+                        >
+                            <ChevronUp className="w-4 h-4 text-slate-600" />
+                        </button>
+                        <span className="text-xs font-mono w-12 text-center text-slate-500">
+                           {searchResults.length > 0 ? `${currentMatchIndex + 1}/${searchResults.length}` : "0/0"}
+                        </span>
+                        <button 
+                          onClick={handleNextMatch}
+                          disabled={searchResults.length === 0}
+                          className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-50"
+                          title="Next Match"
+                        >
+                             <ChevronDown className="w-4 h-4 text-slate-600" />
+                        </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  // NORMAL HEADER
+                  <>
+                    <div className="flex items-center gap-3">
+                      {isMobileView && <button onClick={() => setShowChatOnMobile(false)} className="p-2"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>}
+                      <div className="relative"><div className={`w-11 h-11 rounded-full bg-gradient-to-br ${getAvatarColor(activeUser.id)} flex items-center justify-center text-white font-bold text-sm`}>{getInitials(activeUser.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={activeUser.isOnline} size="md" /></div></div>
+                      <div>
+                        <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                          {activeUser.name}
+                          {pinnedChatIds.has(activeUser.id) && <Pin className="w-3 h-3 text-indigo-500 rotate-45" />}
+                        </h3>
+                        <p className="text-xs text-slate-500">{isTyping ? <span className="text-green-600">typing...</span> : activeUser.isOnline ? <span className="text-green-600">Online</span> : <span className="text-slate-400">Offline</span>}</p>
+                      </div>
+                    </div>
+                    
+                    {/* DROPDOWN MENU */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-2 hover:bg-slate-100 rounded-lg"><MoreVertical className="w-5 h-5 text-slate-500" /></button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={(e) => {
+                            if (activeOtherUserId) togglePinChat(e as any, activeOtherUserId);
+                        }}>
+                          {activeOtherUserId && pinnedChatIds.has(activeOtherUserId) ? 
+                            <><PinOff className="w-4 h-4 mr-2" /> Unpin Chat</> : 
+                            <><Pin className="w-4 h-4 mr-2" /> Pin Chat</>
+                          }
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={toggleChatSearch}>
+                          <Search className="w-4 h-4 mr-2" /> Search Chat
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                )}
               </div>
 
               {/* Messages */}
@@ -578,28 +734,36 @@ export default function PoliceChat() {
                   const isMine = msg.senderId === currentUserId;
                   const isMedia = msg.type !== 'text';
                   
-                  // Logic to display text for reply bubble
                   let replyText = "Original message";
                   if (msg.replyTo) {
-                    if (msg.replyToContent) {
-                      replyText = msg.replyToContent;
-                    } else {
+                    if (msg.replyToContent) replyText = msg.replyToContent;
+                    else {
                       const original = messages.find(m => m.id === msg.replyTo);
-                      if (original) {
-                         if (original.type === 'image') replyText = "📷 Photo";
-                         else if (original.type === 'video') replyText = "🎥 Video";
-                         else if (original.type === 'pdf') replyText = "📄 Document";
-                         else if (original.type === 'audio') replyText = "🎵 Audio";
-                         else replyText = original.content;
-                      }
+                      if (original) replyText = original.type === 'text' ? original.content : "Media";
                     }
                   }
 
+                  // Check if this message is the currently highlighted search result
+                  const isMatched = searchResults.includes(msg.id);
+                  const isFocused = isMatched && searchResults[currentMatchIndex] === msg.id;
+
                   return (
-                    <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex items-end gap-2 mb-1 ${isMine ? "justify-end" : "justify-start"}`}>
+                    <motion.div 
+                      key={msg.id} 
+                      // Attach ref here for scrolling
+                      ref={(el) => { if (el) messageRefs.current.set(msg.id, el); }}
+                      initial={{ opacity: 0, y: 10 }} 
+                      animate={{ 
+                          opacity: 1, 
+                          y: 0,
+                          // Gentle scale pulse if it's the focused search result
+                          scale: isFocused ? 1.02 : 1
+                      }} 
+                      className={`flex items-end gap-2 mb-1 ${isMine ? "justify-end" : "justify-start"} ${isFocused ? "z-10" : ""}`}
+                    >
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <div className={`relative max-w-[85%] cursor-pointer hover:shadow-md transition-all ${isMine ? "rounded-l-2xl rounded-tr-2xl rounded-br-md" : "rounded-r-2xl rounded-tl-2xl rounded-bl-md"} ${isMedia ? "p-1 bg-white border border-slate-200" : (isMine ? "px-4 py-2 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white" : "px-4 py-2 bg-white text-slate-800 border border-slate-100")}`}>
+                          <div className={`relative max-w-[85%] cursor-pointer hover:shadow-md transition-all ${isMine ? "rounded-l-2xl rounded-tr-2xl rounded-br-md" : "rounded-r-2xl rounded-tl-2xl rounded-bl-md"} ${isMedia ? "p-1 bg-white border border-slate-200" : (isMine ? "px-4 py-2 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white" : "px-4 py-2 bg-white text-slate-800 border border-slate-100")} ${isFocused ? "ring-4 ring-orange-400/30 shadow-lg" : ""}`}>
                             {msg.replyTo && <div className="mb-1 p-1 px-2 border-l-2 bg-black/5 text-xs rounded opacity-70 truncate max-w-[200px]">{replyText}</div>}
                             {renderMessageContent(msg, isMine)}
                             <div className={`flex items-center justify-end gap-1 mt-1 ${isMine && !isMedia ? "text-indigo-200" : "text-slate-400"}`}>
@@ -613,7 +777,7 @@ export default function PoliceChat() {
                               setReplyingTo(msg);
                               setTimeout(() => inputRef.current?.focus(), 100);
                           }}><Reply className="w-4 h-4 mr-2" /> Reply</DropdownMenuItem>
-                          {msg.type === 'pdf' && <DropdownMenuItem onClick={() => simulateDownload(msg.id, msg.content)}><Download className="w-4 h-4 mr-2" /> Download</DropdownMenuItem>}
+                          {(msg.type === 'pdf' || msg.type === 'file' || msg.type === 'image') && <DropdownMenuItem onClick={() => window.open(msg.content, "_blank")}><Download className="w-4 h-4 mr-2" /> Download</DropdownMenuItem>}
                           <DropdownMenuItem onClick={() => { chatService.deleteMessage(msg.id); setMessages(prev => prev.filter(m => m.id !== msg.id)); }} className="text-red-600"><Trash2 className="w-4 h-4 mr-2" /> Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -623,7 +787,7 @@ export default function PoliceChat() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Reply Preview Bar - RESTORED */}
+              {/* Reply Preview Bar */}
               <AnimatePresence>
                 {replyingTo && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -645,7 +809,7 @@ export default function PoliceChat() {
 
               {/* Input */}
               <div className="px-4 py-3 bg-white border-t-2 border-slate-200 relative">
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,video/*,audio/*,.pdf" />
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,video/*,audio/*,.pdf,.doc,.docx" />
                 <AnimatePresence>
                   {showEmojiPicker && (
                     <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 10, opacity: 0 }} className="absolute bottom-full left-4 mb-2 bg-white p-2 rounded-xl shadow-xl border w-64 grid grid-cols-6 gap-1 z-50">
@@ -655,7 +819,9 @@ export default function PoliceChat() {
                 </AnimatePresence>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500"><Smile className="w-5 h-5" /></button>
-                  <button onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500"><Paperclip className="w-5 h-5" /></button>
+                  <button onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500" disabled={isUploading}>
+                    {isUploading ? <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /> : <Paperclip className="w-5 h-5" />}
+                  </button>
                   <Input ref={inputRef} value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()} placeholder="Type a message..." className="flex-1 bg-slate-50 border-slate-200 rounded-xl" />
                   <button onClick={sendMessage} disabled={!newMessage.trim()} className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50"><Send className="w-5 h-5" /></button>
                 </div>

@@ -33,14 +33,16 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(withDefaults())
+                .cors(withDefaults()) // Uses the corsConfigurationSource bean below
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Allow access to uploaded files
                         .requestMatchers("/uploads/**").permitAll()
-                        .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/files/download/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
+                        // Upload endpoint requires authentication
                         .requestMatchers("/api/files/upload").authenticated()
                         .requestMatchers("/api/chat/**").hasAnyRole("POLICE", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
@@ -61,9 +63,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173", "http://localhost:8080"));
+        
+        // IMPORTANT FIX: Use setAllowedOriginPatterns("*") instead of setAllowedOrigins
+        // This allows ALL origins but satisfies the browser's "Access-Control-Allow-Credentials" requirement
+        configuration.setAllowedOriginPatterns(List.of("*"));
+        
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));
+        configuration.setAllowedHeaders(Arrays.asList("*")); // Allow all headers
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
