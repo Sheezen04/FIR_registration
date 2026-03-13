@@ -6,9 +6,11 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   chatService,
+  wsManager,
   ChatMessage,
   Conversation,
-} from "@/services/chatService";
+  ChatUser,
+} from "@/services/ChatService";
 import {
   Shield,
   Scale,
@@ -98,20 +100,23 @@ const CircularProgress = ({ progress, onClick }: { progress: number; onClick: (e
 const PRESET_EMOJIS = ["👍", "👋", "👮", "🚓", "🚨", "📝", "✅", "❌", "📍", "📅", "⚖️", "📷", "🔍", "🛑", "⭐", "🤝"];
 
 export default function PoliceChat() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const currentUserId = user?.id || "";
+  
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<string | null>(null);
+  const [activeOtherUserId, setActiveOtherUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showUserList, setShowUserList] = useState(false);
+  const [showUserList, setShowUserList] = useState(true);
+  const [policeUsers, setPoliceUsers] = useState<ChatUser[]>([]);
   
   // ── Reply State ──
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   
   const [isMobileView, setIsMobileView] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   
   // UI States
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -128,27 +133,155 @@ export default function PoliceChat() {
   
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load Data ──
-  const loadConversations = useCallback(() => setConversations(chatService.getConversations()), []);
-  const loadMessages = useCallback((convId: string) => setMessages(chatService.getMessages(convId)), []);
+  // ── Derived active conversation and user ──
+  const activeConversation = useMemo(() => {
+    if (!activeOtherUserId) return null;
+    return conversations.find(c => c.participants[0]?.id === activeOtherUserId) || null;
+  }, [conversations, activeOtherUserId]);
 
+  const activeUser = activeConversation?.participants[0] || policeUsers.find(u => u.id === activeOtherUserId) || null;
+
+  const isTyping = activeOtherUserId ? typingUsers[activeOtherUserId] || false : false;
+
+  // ── Load Data (async) ──
+  const loadConversations = useCallback(async () => {
+    if (!currentUserId) return;
+    try {
+      const convs = await chatService.getConversations(currentUserId);
+      setConversations(convs);
+    } catch (err) {
+      console.error("[Chat] Failed to load conversations:", err);
+    }
+  }, [currentUserId]);
+
+  const loadMessages = useCallback(async (otherUserId: string) => {
+    if (!currentUserId) return;
+    try {
+      const msgs = await chatService.getMessages(otherUserId, currentUserId);
+      setMessages(msgs);
+    } catch (err) {
+      console.error("[Chat] Failed to load messages:", err);
+    }
+  }, [currentUserId]);
+
+  const loadPoliceUsers = useCallback(async () => {
+  try {
+    const users = await chatService.getUsers();
+    console.log("Police Users:", users);
+    setPoliceUsers(users);
+  } catch (err) {
+    console.error("[Chat] Failed to load police users:", err);
+  }
+}, []);
+
+  // ── WebSocket Connection ──
   useEffect(() => {
-    loadConversations();
+  if (!currentUserId || !token) return;
+
+  wsManager.connect(currentUserId, token);
+
+  const init = async () => {
+    await loadPoliceUsers();
+    await loadConversations();
+  };
+
+  init();
+
+    // Listen for real-time messages
+    const unsubMsg = wsManager.onMessage((msg) => {
+      // Update messages if we're in the right conversation
+      setMessages(prev => {
+        const otherUserId = msg.senderId === currentUserId ? msg.receiverId : msg.senderId;
+        if (otherUserId === activeOtherUserId) {
+          // Avoid duplicates
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        }
+        return prev;
+      });
+      // Refresh conversations list
+      loadConversations();
+    });
+
+    // Listen for typing notifications
+    const unsubTyping = wsManager.onTyping((data) => {
+      setTypingUsers(prev => ({ ...prev, [data.senderId]: data.typing }));
+      // Auto-clear typing after 3s
+      if (data.typing) {
+        setTimeout(() => {
+          setTypingUsers(prev => ({ ...prev, [data.senderId]: false }));
+        }, 3000);
+      }
+    });
+
+    // Listen for online/offline status changes
+    const unsubStatus = wsManager.onStatusChange((data) => {
+      // Update conversations
+      setConversations(prev => prev.map(c => ({
+        ...c,
+        participants: c.participants.map(p =>
+          p.id === data.userId ? { ...p, isOnline: data.online, lastSeen: data.lastSeen } : p
+        ),
+      })));
+      // Update police users list
+      setPoliceUsers(prev => prev.map(u =>
+        u.id === data.userId ? { ...u, isOnline: data.online, lastSeen: data.lastSeen } : u
+      ));
+    });
+
+    // Listen for read receipts
+    const unsubRead = wsManager.onReadReceipt((data) => {
+      // Update message statuses
+      setMessages(prev => prev.map(m =>
+        m.senderId === currentUserId && m.receiverId === data.readerId
+          ? { ...m, status: "read" as const }
+          : m
+      ));
+    });
+
+    return () => {
+      unsubMsg();
+      unsubTyping();
+      unsubStatus();
+      unsubRead();
+      wsManager.disconnect();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, token]);
+
+  // Reload messages when active conversation changes
+  useEffect(() => {
+    if (activeOtherUserId) {
+      loadMessages(activeOtherUserId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOtherUserId]);
+
+  // Re-subscribe to messages when activeOtherUserId changes (for real-time updates)
+  useEffect(() => {
+    if (!currentUserId) return;
+    const unsubMsg = wsManager.onMessage((msg) => {
+      const otherUserId = msg.senderId === currentUserId ? msg.receiverId : msg.senderId;
+      if (otherUserId === activeOtherUserId) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+      loadConversations();
+    });
+    return () => unsubMsg();
+  }, [activeOtherUserId, currentUserId, loadConversations]);
+
+  // Mobile check
+  useEffect(() => {
     const checkMobile = () => setIsMobileView(window.innerWidth < 768);
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
-  }, [loadConversations]);
-
-  useEffect(() => {
-    pollingRef.current = setInterval(() => {
-      loadConversations();
-      if (activeConversation) loadMessages(activeConversation);
-    }, 2000);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [activeConversation, loadConversations, loadMessages]);
+  }, []);
 
   // ── Smart Scroll Logic ──
   const scrollToBottom = (smooth = true) => {
@@ -156,11 +289,11 @@ export default function PoliceChat() {
   };
 
   useEffect(() => {
-    if (activeConversation) {
+    if (activeOtherUserId) {
       isUserAtBottomRef.current = true;
       setTimeout(() => scrollToBottom(false), 50);
     }
-  }, [activeConversation]);
+  }, [activeOtherUserId]);
 
   useEffect(() => {
     if (isUserAtBottomRef.current) scrollToBottom();
@@ -173,9 +306,6 @@ export default function PoliceChat() {
     isUserAtBottomRef.current = distanceFromBottom < 100;
   };
 
-  const activeConvData = useMemo(() => conversations.find((c) => c.id === activeConversation), [conversations, activeConversation]);
-  const activeUser = activeConvData?.participants[0];
-
   const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) return conversations;
     const query = searchQuery.toLowerCase();
@@ -183,52 +313,55 @@ export default function PoliceChat() {
   }, [conversations, searchQuery]);
 
   // ── Actions ──
-  const selectConversation = (convId: string) => {
-    setActiveConversation(convId);
-    chatService.markAsRead(convId);
-    loadMessages(convId);
+  const selectConversation = (otherUserId: string) => {
+    setActiveOtherUserId(otherUserId);
+    // Mark messages as read
+    chatService.markAsRead(otherUserId).then(() => loadConversations());
+    loadMessages(otherUserId);
     setShowUserList(false);
     if (isMobileView) setShowChatOnMobile(true);
   };
 
   const sendMessage = () => {
-    if (!newMessage.trim() || !activeConversation || !activeUser) return;
+    if (!newMessage.trim() || !activeOtherUserId || !activeUser) return;
     
-    // Pass the replyingTo ID here
-    chatService.sendMessage(activeUser.id, newMessage.trim(), activeConversation, "text", undefined, replyingTo?.id);
+    // Send via WebSocket
+    chatService.sendMessage(activeOtherUserId, newMessage.trim(), "TEXT", undefined, replyingTo?.id);
     
     setNewMessage("");
-    setReplyingTo(null); // Clear reply after sending
+    setReplyingTo(null);
     setShowEmojiPicker(false);
     
     isUserAtBottomRef.current = true;
-    loadMessages(activeConversation);
-    loadConversations();
     setTimeout(() => scrollToBottom(), 100);
+  };
 
-    setTimeout(() => setIsTyping(true), 1500);
-    setTimeout(() => { setIsTyping(false); loadMessages(activeConversation); }, 4000);
+  // ── Typing indicator ──
+  const handleTyping = () => {
+    if (!activeOtherUserId) return;
+    chatService.sendTyping(activeOtherUserId, true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      if (activeOtherUserId) chatService.sendTyping(activeOtherUserId, false);
+    }, 2000);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && activeConversation && activeUser) {
+    if (file && activeOtherUserId && activeUser) {
       const fileUrl = URL.createObjectURL(file);
-      let type: "text" | "image" | "video" | "audio" | "pdf" = "text";
+      let type: "TEXT" | "IMAGE" | "VIDEO" | "AUDIO" | "PDF" = "TEXT";
       
-      if (file.type.startsWith("image/")) type = "image";
-      else if (file.type.startsWith("video/")) type = "video";
-      else if (file.type.startsWith("audio/")) type = "audio";
-      else if (file.type === "application/pdf") type = "pdf";
-      else type = "text";
+      if (file.type.startsWith("image/")) type = "IMAGE";
+      else if (file.type.startsWith("video/")) type = "VIDEO";
+      else if (file.type.startsWith("audio/")) type = "AUDIO";
+      else if (file.type === "application/pdf") type = "PDF";
+      else type = "TEXT";
 
-      const content = type === "text" ? `📎 ${file.name}` : fileUrl;
-      const msgId = chatService.sendMessage(activeUser.id, content, activeConversation, type, undefined, replyingTo?.id);
+      const content = type === "TEXT" ? `📎 ${file.name}` : fileUrl;
+      chatService.sendMessage(activeOtherUserId, content, type, undefined, replyingTo?.id);
       
-      setDownloadedFiles(prev => ({ ...prev, [msgId]: true }));
       isUserAtBottomRef.current = true;
-      loadMessages(activeConversation);
-      loadConversations();
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -357,12 +490,16 @@ export default function PoliceChat() {
                 <div className="p-3 bg-indigo-50">
                   <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">Start New Chat</p>
                   <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                    {chatService.getUsers().map((u) => (
-                      <button key={u.id} onClick={() => {chatService.startConversation(u.id); selectConversation(chatService.getConversations()[0]?.id || "");}} className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white transition-all">
-                        <div className="relative"><div className={`w-9 h-9 rounded-full bg-gradient-to-br ${getAvatarColor(u.id)} flex items-center justify-center text-white font-bold text-xs`}>{getInitials(u.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={u.isOnline} /></div></div>
-                        <div className="text-left flex-1 min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p><p className="text-xs text-slate-500 truncate">{u.station}</p></div>
-                      </button>
-                    ))}
+                    {policeUsers && policeUsers.length > 0 ? (
+                      policeUsers.map((u) => (
+                        <button key={u.id} onClick={() => { selectConversation(u.id); }} className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white transition-all">
+                          <div className="relative"><div className={`w-9 h-9 rounded-full bg-gradient-to-br ${getAvatarColor(u.id)} flex items-center justify-center text-white font-bold text-xs`}>{getInitials(u.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={u.isOnline} /></div></div>
+                          <div className="text-left flex-1 min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p><p className="text-xs text-slate-500 truncate">{u.station}</p></div>
+                        </button>
+                      )))
+                    : (
+                      <p className="text-slate-500 text-sm">No users found</p>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -370,28 +507,52 @@ export default function PoliceChat() {
           </AnimatePresence>
 
           <div className="flex-1 overflow-y-auto">
-            {filteredConversations.map((conv) => {
-              const participant = conv.participants[0];
-              const isActive = conv.id === activeConversation;
-              return (
-                <button key={conv.id} onClick={() => selectConversation(conv.id)} className={`w-full flex items-center gap-3 p-4 border-b border-slate-100 transition-all hover:bg-slate-50 ${isActive ? "bg-indigo-50 border-l-4 border-l-indigo-500" : ""}`}>
-                  <div className="relative shrink-0"><div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getAvatarColor(participant.id)} flex items-center justify-center text-white font-bold text-sm`}>{getInitials(participant.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={participant.isOnline} size="md" /></div></div>
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center justify-between gap-2"><h3 className={`text-sm font-semibold truncate ${isActive ? "text-indigo-700" : "text-slate-800"}`}>{participant.name}</h3><span className="text-[10px] text-slate-400 shrink-0">{conv.lastMessage ? formatMessageTime(conv.lastMessage.timestamp) : ""}</span></div>
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <p className="text-xs text-slate-500 truncate flex items-center gap-1">{conv.lastMessage?.senderId === "current" && <MessageStatus status={conv.lastMessage.status} />}{conv.lastMessage?.content || "Start chatting..."}</p>
-                      {conv.unreadCount > 0 && <span className="shrink-0 w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center">{conv.unreadCount}</span>}
+            {filteredConversations.length > 0 ? (
+              filteredConversations.map((conv) => {
+                const participant = conv.participants[0];
+                const isActive = participant.id === activeOtherUserId;
+                return (
+                  <button key={conv.id} onClick={() => selectConversation(participant.id)} className={`w-full flex items-center gap-3 p-4 border-b border-slate-100 transition-all hover:bg-slate-50 ${isActive ? "bg-indigo-50 border-l-4 border-l-indigo-500" : ""}`}>
+                    <div className="relative shrink-0"><div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getAvatarColor(participant.id)} flex items-center justify-center text-white font-bold text-sm`}>{getInitials(participant.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={participant.isOnline} size="md" /></div></div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="flex items-center justify-between gap-2"><h3 className={`text-sm font-semibold truncate ${isActive ? "text-indigo-700" : "text-slate-800"}`}>{participant.name}</h3><span className="text-[10px] text-slate-400 shrink-0">{conv.lastMessage ? formatMessageTime(conv.lastMessage.timestamp) : ""}</span></div>
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        <p className="text-xs text-slate-500 truncate flex items-center gap-1">{conv.lastMessage?.senderId === currentUserId && <MessageStatus status={conv.lastMessage.status} />}{conv.lastMessage?.content || "Start chatting..."}</p>
+                        {conv.unreadCount > 0 && <span className="shrink-0 w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center">{conv.unreadCount}</span>}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                {policeUsers.length > 0 ? (
+                  <div className="w-full">
+                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Available Officers</p>
+                    <div className="space-y-1">
+                      {policeUsers.filter(u => !searchQuery.trim() || u.name.toLowerCase().includes(searchQuery.toLowerCase())).map((u) => (
+                        <button key={u.id} onClick={() => selectConversation(u.id)} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-indigo-50 transition-all">
+                          <div className="relative"><div className={`w-11 h-11 rounded-full bg-gradient-to-br ${getAvatarColor(u.id)} flex items-center justify-center text-white font-bold text-xs`}>{getInitials(u.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={u.isOnline} size="md" /></div></div>
+                          <div className="text-left flex-1 min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p><p className="text-xs text-slate-500 truncate">{u.station || (u.isOnline ? "Online" : "Offline")}</p></div>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                </button>
-              );
-            })}
+                ) : (
+                  <div>
+                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4"><MessageCircle className="w-8 h-8 text-slate-400" /></div>
+                    <p className="text-sm font-semibold text-slate-600 mb-1">No conversations yet</p>
+                    <p className="text-xs text-slate-400">Click the <span className="text-indigo-500 font-medium">+</span> button above to start a new chat</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Chat Area */}
         <div className={`${isMobileView && !showChatOnMobile ? "hidden" : "flex"} flex-1 flex-col bg-slate-50`}>
-          {!activeConversation || !activeUser ? (
+          {!activeOtherUserId || !activeUser ? (
             <div className="flex-1 flex items-center justify-center text-center">
               <div><div className="w-24 h-24 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-6"><MessageCircle className="w-12 h-12 text-indigo-400" /></div><h3 className="text-2xl font-black text-slate-700 mb-2">Police Chat</h3><p className="text-slate-500 max-w-sm">Secure channel for official communication.</p></div>
             </div>
@@ -401,7 +562,7 @@ export default function PoliceChat() {
                 <div className="flex items-center gap-3">
                   {isMobileView && <button onClick={() => setShowChatOnMobile(false)} className="p-2"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>}
                   <div className="relative"><div className={`w-11 h-11 rounded-full bg-gradient-to-br ${getAvatarColor(activeUser.id)} flex items-center justify-center text-white font-bold text-sm`}>{getInitials(activeUser.name)}</div><div className="absolute -bottom-0.5 -right-0.5"><OnlineStatus isOnline={activeUser.isOnline} size="md" /></div></div>
-                  <div><h3 className="font-bold text-slate-800 text-sm">{activeUser.name}</h3><p className="text-xs text-slate-500">{isTyping ? <span className="text-green-600">typing...</span> : "Online"}</p></div>
+                  <div><h3 className="font-bold text-slate-800 text-sm">{activeUser.name}</h3><p className="text-xs text-slate-500">{isTyping ? <span className="text-green-600">typing...</span> : activeUser.isOnline ? <span className="text-green-600">Online</span> : <span className="text-slate-400">Offline</span>}</p></div>
                 </div>
                 <button className="p-2 hover:bg-slate-100 rounded-lg"><MoreVertical className="w-5 h-5 text-slate-500" /></button>
               </div>
@@ -414,19 +575,23 @@ export default function PoliceChat() {
                 style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }}
               >
                 {messages.map((msg) => {
-                  const isMine = msg.senderId === "current";
+                  const isMine = msg.senderId === currentUserId;
                   const isMedia = msg.type !== 'text';
                   
                   // Logic to display text for reply bubble
                   let replyText = "Original message";
                   if (msg.replyTo) {
-                    const original = messages.find(m => m.id === msg.replyTo);
-                    if (original) {
-                       if (original.type === 'image') replyText = "📷 Photo";
-                       else if (original.type === 'video') replyText = "🎥 Video";
-                       else if (original.type === 'pdf') replyText = "📄 Document";
-                       else if (original.type === 'audio') replyText = "🎵 Audio";
-                       else replyText = original.content;
+                    if (msg.replyToContent) {
+                      replyText = msg.replyToContent;
+                    } else {
+                      const original = messages.find(m => m.id === msg.replyTo);
+                      if (original) {
+                         if (original.type === 'image') replyText = "📷 Photo";
+                         else if (original.type === 'video') replyText = "🎥 Video";
+                         else if (original.type === 'pdf') replyText = "📄 Document";
+                         else if (original.type === 'audio') replyText = "🎵 Audio";
+                         else replyText = original.content;
+                      }
                     }
                   }
 
@@ -449,7 +614,7 @@ export default function PoliceChat() {
                               setTimeout(() => inputRef.current?.focus(), 100);
                           }}><Reply className="w-4 h-4 mr-2" /> Reply</DropdownMenuItem>
                           {msg.type === 'pdf' && <DropdownMenuItem onClick={() => simulateDownload(msg.id, msg.content)}><Download className="w-4 h-4 mr-2" /> Download</DropdownMenuItem>}
-                          <DropdownMenuItem onClick={() => chatService.deleteMessage(msg.id)} className="text-red-600"><Trash2 className="w-4 h-4 mr-2" /> Delete</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { chatService.deleteMessage(msg.id); setMessages(prev => prev.filter(m => m.id !== msg.id)); }} className="text-red-600"><Trash2 className="w-4 h-4 mr-2" /> Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </motion.div>
@@ -466,7 +631,7 @@ export default function PoliceChat() {
                       <div className="flex items-center gap-3">
                         <div className="w-1 h-10 bg-indigo-500 rounded-full" />
                         <div>
-                          <p className="text-xs font-bold text-indigo-600">Replying to {replyingTo.senderId === "current" ? "yourself" : activeUser?.name}</p>
+                          <p className="text-xs font-bold text-indigo-600">Replying to {replyingTo.senderId === currentUserId ? "yourself" : activeUser?.name}</p>
                           <p className="text-xs text-slate-500 truncate max-w-[300px]">
                             {replyingTo.type === 'image' ? "📷 Photo" : replyingTo.type === 'video' ? "🎥 Video" : replyingTo.type === 'pdf' ? "📄 Document" : replyingTo.type === 'audio' ? "🎵 Audio" : replyingTo.content}
                           </p>
@@ -491,7 +656,7 @@ export default function PoliceChat() {
                 <div className="flex items-center gap-2">
                   <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500"><Smile className="w-5 h-5" /></button>
                   <button onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500"><Paperclip className="w-5 h-5" /></button>
-                  <Input ref={inputRef} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()} placeholder="Type a message..." className="flex-1 bg-slate-50 border-slate-200 rounded-xl" />
+                  <Input ref={inputRef} value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()} placeholder="Type a message..." className="flex-1 bg-slate-50 border-slate-200 rounded-xl" />
                   <button onClick={sendMessage} disabled={!newMessage.trim()} className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50"><Send className="w-5 h-5" /></button>
                 </div>
               </div>
