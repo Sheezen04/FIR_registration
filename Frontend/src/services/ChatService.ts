@@ -336,13 +336,13 @@ export const chatService = {
 
   // Mark messages from a user as read (REST call + WebSocket notification)
   markAsRead: async (senderId: string): Promise<void> => {
-    await api.post(`/api/chat/messages/read/${senderId}`);
+    await api.post(`/chat/messages/read/${senderId}`);
     wsManager.sendReadReceipt(senderId);
   },
 
   // Delete a message
   deleteMessage: async (messageId: string): Promise<void> => {
-    await api.delete(`/api/chat/messages/${messageId}`);
+    await api.delete(`/chat/messages/${messageId}`);
   },
 
   // Send message via WebSocket (real-time)

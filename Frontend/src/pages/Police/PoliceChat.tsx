@@ -736,10 +736,21 @@ export default function PoliceChat() {
                   
                   let replyText = "Original message";
                   if (msg.replyTo) {
-                    if (msg.replyToContent) replyText = msg.replyToContent;
-                    else {
-                      const original = messages.find(m => m.id === msg.replyTo);
-                      if (original) replyText = original.type === 'text' ? original.content : "Media";
+                    const original = messages.find(m => m.id === msg.replyTo);
+                    if (original) {
+                      if (original.type === 'text') replyText = original.content;
+                      else if (original.type === 'image') replyText = "📷 Photo";
+                      else if (original.type === 'video') replyText = "🎥 Video";
+                      else if (original.type === 'audio') replyText = "🎵 Audio";
+                      else if (original.type === 'pdf') replyText = "📄 Document";
+                      else replyText = "📎 Attachment";
+                    } else if (msg.replyToContent) {
+                      // Fallback to backend-provided content — show friendly label if it looks like a URL
+                      if (msg.replyToContent.startsWith("http://") || msg.replyToContent.startsWith("https://") || msg.replyToContent.startsWith("/api/files")) {
+                        replyText = "📎 Attachment";
+                      } else {
+                        replyText = msg.replyToContent;
+                      }
                     }
                   }
 
